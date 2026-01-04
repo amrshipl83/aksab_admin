@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-// استيراد صفحة الإدارة التي تحتوي على الـ Tabs
-import '../pages/management_page.dart'; 
+// الربط بصفحة الإدارة
+import '../pages/management_page.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -24,29 +24,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadDashboardData() async {
-    try {
-      final ordersSnapshot = await FirebaseFirestore.instance.collection("orders").get();
-      final sellersSnapshot = await FirebaseFirestore.instance.collection("sellers").get();
-      final buyersSnapshot = await FirebaseFirestore.instance.collection("users").get();
+    final ordersSnapshot = await FirebaseFirestore.instance.collection("orders").get();
+    final sellersSnapshot = await FirebaseFirestore.instance.collection("sellers").get();
+    final buyersSnapshot = await FirebaseFirestore.instance.collection("users").get();
 
-      double totalSales = 0;
-      for (var doc in ordersSnapshot.docs) {
-        final data = doc.data();
-        if (data.containsKey('total')) {
-          totalSales += (data['total'] as num).toDouble();
-        }
+    double totalSales = 0;
+    for (var doc in ordersSnapshot.docs) {
+      final data = doc.data();
+      if (data.containsKey('total')) {
+        totalSales += (data['total'] as num).toDouble();
       }
+    }
 
-      if (mounted) {
-        setState(() {
-          _salesTotal = totalSales;
-          _ordersCount = ordersSnapshot.size;
-          _sellersCount = sellersSnapshot.size;
-          _usersCount = buyersSnapshot.size;
-        });
-      }
-    } catch (e) {
-      debugPrint("Error loading data: $e");
+    if (mounted) {
+      setState(() {
+        _salesTotal = totalSales;
+        _ordersCount = ordersSnapshot.size;
+        _sellersCount = sellersSnapshot.size;
+        _usersCount = buyersSnapshot.size;
+      });
     }
   }
 
@@ -61,7 +57,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         backgroundColor: const Color(0xFF1F2937),
         foregroundColor: Colors.white,
       ) : null,
+
       drawer: isMobile ? Drawer(child: _buildSidebarContent(context)) : null,
+
       body: Row(
         children: [
           if (!isMobile) Container(
@@ -69,6 +67,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             color: const Color(0xFF1F2937),
             child: _buildSidebarContent(context),
           ),
+
           Expanded(
             child: SingleChildScrollView(
               padding: EdgeInsets.all(isMobile ? 15 : 30),
@@ -84,6 +83,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                   const SizedBox(height: 25),
+
                   GridView.count(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
@@ -114,11 +114,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Column(
           children: [
             const SizedBox(height: 20),
-            // أيقونة إضافة الأقسام والمنتجات - تم الربط بصفحة ManagementPage
+            // الآن الزر مفعل وينقلك لصفحة الإدارة
             _buildSidebarItem(Icons.add_box, "إضافة الأقسام والمنتجات", () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => ManagementPage()),
+                MaterialPageRoute(builder: (context) => const ManagementPage()),
               );
             }),
             _buildSidebarItem(Icons.inventory_2, "الطلبات", () {}),
