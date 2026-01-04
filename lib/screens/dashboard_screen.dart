@@ -118,11 +118,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Column(
           children: [
             const SizedBox(height: 20),
-            // تم تصحيح الخطأ هنا بحذف كلمة const
+            // تعديل السطر 125 المسبب للمشكلة
             _buildSidebarItem(Icons.add_box, "إضافة الأقسام والمنتجات", () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const ManagementPage()),
+                MaterialPageRoute(builder: (context) => ManagementPage()),
               );
             }),
             _buildSidebarItem(Icons.inventory_2, "الطلبات", () {}),
