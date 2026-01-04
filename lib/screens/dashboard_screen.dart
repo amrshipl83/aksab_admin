@@ -24,25 +24,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadDashboardData() async {
-    final ordersSnapshot = await FirebaseFirestore.instance.collection("orders").get();
-    final sellersSnapshot = await FirebaseFirestore.instance.collection("sellers").get();
-    final buyersSnapshot = await FirebaseFirestore.instance.collection("users").get();
+    try {
+      final ordersSnapshot = await FirebaseFirestore.instance.collection("orders").get();
+      final sellersSnapshot = await FirebaseFirestore.instance.collection("sellers").get();
+      final buyersSnapshot = await FirebaseFirestore.instance.collection("users").get();
 
-    double totalSales = 0;
-    for (var doc in ordersSnapshot.docs) {
-      final data = doc.data();
-      if (data.containsKey('total')) {
-        totalSales += (data['total'] as num).toDouble();
+      double totalSales = 0;
+      for (var doc in ordersSnapshot.docs) {
+        final data = doc.data();
+        if (data.containsKey('total')) {
+          totalSales += (data['total'] as num).toDouble();
+        }
       }
-    }
 
-    if (mounted) {
-      setState(() {
-        _salesTotal = totalSales;
-        _ordersCount = ordersSnapshot.size;
-        _sellersCount = sellersSnapshot.size;
-        _usersCount = buyersSnapshot.size;
-      });
+      if (mounted) {
+        setState(() {
+          _salesTotal = totalSales;
+          _ordersCount = ordersSnapshot.size;
+          _sellersCount = sellersSnapshot.size;
+          _usersCount = buyersSnapshot.size;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading data: $e");
     }
   }
 
@@ -63,7 +67,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: Row(
         children: [
           if (!isMobile) Container(
-            width: 90, 
+            width: 90,
             color: const Color(0xFF1F2937),
             child: _buildSidebarContent(context),
           ),
@@ -114,7 +118,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Column(
           children: [
             const SizedBox(height: 20),
-            // الآن الزر مفعل وينقلك لصفحة الإدارة
+            // تم تصحيح الخطأ هنا بحذف كلمة const
             _buildSidebarItem(Icons.add_box, "إضافة الأقسام والمنتجات", () {
               Navigator.push(
                 context,
