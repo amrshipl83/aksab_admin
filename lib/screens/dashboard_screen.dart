@@ -10,7 +10,8 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  int _salesTotal = 0;
+  // متغيرات البيانات
+  double _salesTotal = 0;
   int _ordersCount = 0;
   int _sellersCount = 0;
   int _usersCount = 0;
@@ -21,8 +22,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _loadData();
   }
 
-  // جلب البيانات من المجموعات المختلفة (نفس منطق الـ JS الخاص بك)
   Future<void> _loadData() async {
+    // جلب البيانات مع مراعاة أسماء المجموعات والحقول التي حددناها سابقاً
     final orders = await FirebaseFirestore.instance.collection('orders').get();
     final sellers = await FirebaseFirestore.instance.collection('sellers').get();
     final users = await FirebaseFirestore.instance.collection('users').get();
@@ -34,7 +35,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     if (mounted) {
       setState(() {
-        _salesTotal = total.toInt();
+        _salesTotal = total;
         _ordersCount = orders.size;
         _sellersCount = sellers.size;
         _usersCount = users.size;
@@ -44,58 +45,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // تحديد نوع الجهاز بناءً على العرض
+    bool isMobile = MediaQuery.of(context).size.width < 800;
+
     return Scaffold(
+      appBar: isMobile ? AppBar(
+        title: const Text("لوحة التحكم", style: TextStyle(fontFamily: 'Tajawal')),
+        backgroundColor: const Color(0xFF1F2937),
+        foregroundColor: Colors.white,
+      ) : null,
+      
+      // القائمة الجانبية: تظهر كـ Drawer في الموبايل و كـ Sidebar ثابت في الكمبيوتر
+      drawer: isMobile ? Drawer(child: _buildSidebarContent()) : null,
+      
       body: Row(
         children: [
-          // 1. الشريط الجانبي (Sidebar) - عرض 80 بكسل كما في الـ HTML
-          Container(
-            width: 90,
+          // لو كمبيوتر، اعرض الـ Sidebar ثابت
+          if (!isMobile) Container(
+            width: 100,
             color: const Color(0xFF1F2937),
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  const SizedBox(height: 20),
-                  _buildSidebarItem(Icons.add_box, "الأقسام", () {}),
-                  _buildSidebarItem(Icons.shopping_bag, "الطلبات", () {}),
-                  _buildSidebarItem(Icons.people, "العملاء", () {}),
-                  _buildSidebarItem(Icons.store, "البائعين", () {}),
-                  _buildSidebarItem(Icons.local_shipping, "الدليفري", () {}),
-                  _buildSidebarItem(Icons.settings, "الإعدادات", () {}),
-                  _buildSidebarItem(Icons.badge, "HR", () {}),
-                  _buildSidebarItem(Icons.campaign, "التسويق", () {}),
-                  _buildSidebarItem(Icons.warehouse, "المخازن", () {}),
-                  _buildSidebarItem(Icons.monetization_on, "المالية", () {}, color: Colors.green),
-                  _buildSidebarItem(Icons.logout, "خروج", () => _logout(context), color: Colors.redAccent),
-                ],
-              ),
-            ),
+            child: _buildSidebarContent(),
           ),
           
-          // 2. المحتوى الرئيسي (Main Content)
+          // المحتوى الرئيسي
           Expanded(
             child: Container(
               color: const Color(0xFFF2F4F8),
-              padding: const EdgeInsets.all(30),
+              padding: EdgeInsets.all(isMobile ? 15 : 30),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Center(
-                    child: Text("لوحة التحكم", 
+                  if (!isMobile) const Padding(
+                    padding: EdgeInsets.only(bottom: 30),
+                    child: Text("لوحة التحكم الإدارية", 
                       style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1F2937))),
                   ),
-                  const SizedBox(height: 30),
-                  // شبكة البطاقات (Cards Grid)
+                  
+                  // شبكة البطاقات: عمود واحد للموبايل، 4 أعمدة للكمبيوتر
                   Expanded(
                     child: GridView.count(
-                      crossAxisCount: MediaQuery.of(context).size.width > 900 ? 4 : 2,
+                      crossAxisCount: isMobile ? 1 : 4, 
                       crossAxisSpacing: 20,
                       mainAxisSpacing: 20,
-                      childAspectRatio: 1.5,
+                      childAspectRatio: isMobile ? 2.5 : 1.3,
                       children: [
-                        _buildStatusCard("$_salesTotal ج.م", "إجمالي المبيعات"),
-                        _buildStatusCard("$_ordersCount", "عدد الطلبات"),
-                        _buildStatusCard("$_sellersCount", "عدد التجار"),
-                        _buildStatusCard("$_usersCount", "عدد العملاء"),
+                        _buildStatusCard("${_salesTotal.toStringAsFixed(2)} ج.م", "إجمالي المبيعات", Colors.blue),
+                        _buildStatusCard("$_ordersCount", "عدد الطلبات", Colors.orange),
+                        _buildStatusCard("$_sellersCount", "عدد التجار", Colors.green),
+                        _buildStatusCard("$_usersCount", "عدد العملاء", Colors.purple),
                       ],
                     ),
                   ),
@@ -108,39 +104,56 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // تصميم عنصر القائمة الجانبية
-  Widget _buildSidebarItem(IconData icon, String label, VoidCallback onTap, {Color color = Colors.white}) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 5),
+  // محتوى القائمة الجانبية (مفصول ليعمل في الـ Drawer والـ Sidebar)
+  Widget _buildSidebarContent() {
+    return Container(
+      color: const Color(0xFF1F2937),
+      child: SingleChildScrollView(
         child: Column(
           children: [
-            Icon(icon, color: color, size: 24),
-            const SizedBox(height: 5),
-            Text(label, textAlign: TextAlign.center, 
-              style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w500)),
+            const SizedBox(height: 50),
+            _buildSidebarItem(Icons.dashboard, "الرئيسية", () {}),
+            _buildSidebarItem(Icons.add_box, "الأقسام", () {}),
+            _buildSidebarItem(Icons.shopping_bag, "الطلبات", () {}),
+            _buildSidebarItem(Icons.people, "العملاء", () {}),
+            _buildSidebarItem(Icons.store, "البائعين", () {}),
+            _buildSidebarItem(Icons.monetization_on, "المالية", () {}, color: Colors.greenAccent),
+            _buildSidebarItem(Icons.logout, "خروج", () => _logout(context), color: Colors.redAccent),
           ],
         ),
       ),
     );
   }
 
-  // تصميم بطاقة الإحصائيات
-  Widget _buildStatusCard(String value, String title) {
+  Widget _buildSidebarItem(IconData icon, String label, VoidCallback onTap, {Color color = Colors.white}) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+      title: Column(
+        children: [
+          Icon(icon, color: color, size: 28),
+          const SizedBox(height: 4),
+          Text(label, style: TextStyle(color: color, fontSize: 12), textAlign: TextAlign.center),
+        ],
+      ),
+      onTap: onTap,
+    );
+  }
+
+  Widget _buildStatusCard(String value, String title, Color accentColor) {
     return Container(
+      padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8)],
-        border: Border.all(color: Colors.grey.shade200),
+        borderRadius: BorderRadius.circular(15),
+        border: Border(right: BorderSide(color: accentColor, width: 5)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(value, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1F2937))),
-          const SizedBox(height: 8),
-          Text(title, style: const TextStyle(fontSize: 16, color: Color(0xFF4B5563))),
+          Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 5),
+          Text(title, style: TextStyle(color: Colors.grey.shade600, fontSize: 16)),
         ],
       ),
     );
