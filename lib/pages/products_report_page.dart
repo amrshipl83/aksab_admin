@@ -18,7 +18,6 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
   final TextEditingController _searchController = TextEditingController();
 
   Map<String, String> mainCategoriesNames = {};
-  Map<String, String> subCategoriesNames = {};
 
   @override
   void initState() {
@@ -28,36 +27,40 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
 
   Future<void> _loadCategoryNames() async {
     final mainSnap = await FirebaseFirestore.instance.collection('mainCategory').get();
-    final subSnap = await FirebaseFirestore.instance.collection('subCategory').get();
     setState(() {
-      for (var doc in mainSnap.docs) mainCategoriesNames[doc.id] = doc['name'];
-      for (var doc in subSnap.docs) subCategoriesNames[doc.id] = doc['name'];
+      for (var doc in mainSnap.docs) {
+        mainCategoriesNames[doc.id] = doc['name'];
+      }
     });
   }
 
-  // --- وظيفة التصدير إلى إكسل ---
   Future<void> _exportToExcel(List<QueryDocumentSnapshot> docs) async {
-    var excel = Excel.createExcel();
-    Sheet sheetObject = excel['Products Report'];
+    try {
+      var excel = Excel.createExcel();
+      Sheet sheetObject = excel['Products'];
 
-    sheetObject.appendRow(['اسم المنتج', 'القسم الرئيسي', 'الحالة', 'الترتيب']);
+      sheetObject.appendRow(['اسم المنتج', 'القسم الرئيسي', 'الحالة']);
 
-    for (var doc in docs) {
-      var data = doc.data() as Map<String, dynamic>;
-      sheetObject.appendRow([
-        data['name'] ?? '',
-        mainCategoriesNames[data['mainId']] ?? 'غير معروف',
-        data['status'] == 'active' ? 'نشط' : 'غير نشط',
-        data['order']?.toString() ?? '0',
-      ]);
+      for (var doc in docs) {
+        var data = doc.data() as Map<String, dynamic>;
+        sheetObject.appendRow([
+          data['name'] ?? '',
+          mainCategoriesNames[data['mainId']] ?? 'غير معروف',
+          data['status'] == 'active' ? 'نشط' : 'غير نشط',
+        ]);
+      }
+
+      final directory = await getTemporaryDirectory();
+      final path = "${directory.path}/products_report.xlsx";
+      final file = File(path);
+      await file.writeAsBytes(excel.encode()!);
+
+      await Share.shareXFiles([XFile(path)], text: 'تقرير المنتجات');
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("خطأ في التصدير: $e")),
+      );
     }
-
-    final directory = await getTemporaryDirectory();
-    final path = "${directory.path}/products_report.xlsx";
-    final file = File(path);
-    await file.writeAsBytes(excel.encode()!);
-
-    await Share.shareXFiles([XFile(path)], text: 'تقرير المنتجات');
   }
 
   @override
@@ -66,10 +69,9 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
       appBar: AppBar(
         title: const Text("كتالوج المنتجات"),
         backgroundColor: const Color(0xFF4361ee),
-        centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.file_download, color: Colors.white),
+            icon: const Icon(Icons.file_download),
             onPressed: () async {
               final snap = await FirebaseFirestore.instance.collection('products').get();
               _exportToExcel(snap.docs);
@@ -89,10 +91,7 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
   Widget _buildFilterSection() {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
-      ),
+      color: Colors.white,
       child: Column(
         children: [
           Row(
@@ -102,7 +101,7 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
                   stream: FirebaseFirestore.instance.collection('mainCategory').snapshots(),
                   builder: (context, snap) {
                     return DropdownButtonFormField<String>(
-                      decoration: const InputDecoration(labelText: "القسم الرئيسي", border: OutlineInputBorder()),
+                      decoration: const InputDecoration(labelText: "القسم الرئيسي"),
                       value: selectedMainId,
                       items: snap.data?.docs.map((d) => DropdownMenuItem(value: d.id, child: Text(d['name']))).toList(),
                       onChanged: (v) => setState(() => selectedMainId = v),
@@ -113,7 +112,7 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
               const SizedBox(width: 8),
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(labelText: "الحالة", border: OutlineInputBorder()),
+                  decoration: const InputDecoration(labelText: "الحالة"),
                   value: selectedStatus,
                   items: const [
                     DropdownMenuItem(value: 'active', child: Text("نشط")),
@@ -128,10 +127,10 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
           TextField(
             controller: _searchController,
             textAlign: TextAlign.right,
-            decoration: InputDecoration(
-              hintText: "بحث سريع بالاسم...",
-              prefixIcon: const Icon(Icons.search),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            decoration: const InputDecoration(
+              hintText: "بحث بالاسم...",
+              prefixIcon: Icon(Icons.search),
+              border: OutlineInputBorder(),
             ),
             onChanged: (v) => setState(() {}),
           ),
@@ -152,7 +151,7 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
         var docs = snapshot.data!.docs;
 
         if (_searchController.text.isNotEmpty) {
-          docs = docs.where((d) => d['name'].toString().toLowerCase().contains(_searchController.text.toLowerCase())).toList();
+          docs = docs.where((d) => d['name'].toString().contains(_searchController.text)).toList();
         }
 
         return ListView.builder(
@@ -162,26 +161,16 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
             final id = docs[index].id;
             final imageUrl = (data['imageUrls'] as List).isNotEmpty ? data['imageUrls'][0] : '';
 
-            return Card(
-              margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              elevation: 2,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              child: ListTile(
-                leading: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: imageUrl != '' 
-                      ? Image.network(imageUrl, width: 50, height: 50, fit: BoxFit.cover)
-                      : Container(width: 50, height: 50, color: Colors.grey[200], child: const Icon(Icons.image_not_supported)),
-                ),
-                title: Text(data['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text("${mainCategoriesNames[data['mainId']] ?? '...'} | ترتيب: ${data['order']}"),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () => _editProduct(id, data)),
-                    IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => _deleteProduct(id, data['name'])),
-                  ],
-                ),
+            return ListTile(
+              leading: imageUrl != '' ? Image.network(imageUrl, width: 40) : const Icon(Icons.image),
+              title: Text(data['name']),
+              subtitle: Text(mainCategoriesNames[data['mainId']] ?? ''),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () => _editProduct(id, data)),
+                  IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => _deleteProduct(id, data['name'])),
+                ],
               ),
             );
           },
@@ -190,47 +179,21 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
     );
   }
 
-  // --- واجهة تعديل المنتج ---
   void _editProduct(String id, Map<String, dynamic> data) {
-    final nameEdit = TextEditingController(text: data['name']);
-    final orderEdit = TextEditingController(text: data['order'].toString());
-    String currentStatus = data['status'];
-
-    showDialog(
+     final nameEdit = TextEditingController(text: data['name']);
+     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("تعديل المنتج", textAlign: TextAlign.center),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: nameEdit, decoration: const InputDecoration(labelText: "اسم المنتج")),
-              TextField(controller: orderEdit, decoration: const InputDecoration(labelText: "الترتيب"), keyboardType: TextInputType.number),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                value: currentStatus,
-                items: const [
-                  DropdownMenuItem(value: 'active', child: Text("نشط")),
-                  DropdownMenuItem(value: 'inactive', child: Text("غير نشط")),
-                ],
-                onChanged: (v) => currentStatus = v!,
-                decoration: const InputDecoration(labelText: "الحالة"),
-              ),
-            ],
-          ),
-        ),
+        title: const Text("تعديل سريع"),
+        content: TextField(controller: nameEdit, decoration: const InputDecoration(labelText: "اسم المنتج")),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("إلغاء")),
           ElevatedButton(
             onPressed: () async {
-              await FirebaseFirestore.instance.collection('products').doc(id).update({
-                'name': nameEdit.text,
-                'order': int.tryParse(orderEdit.text) ?? 0,
-                'status': currentStatus,
-              });
+              await FirebaseFirestore.instance.collection('products').doc(id).update({'name': nameEdit.text});
               Navigator.pop(ctx);
             },
-            child: const Text("حفظ التعديلات"),
+            child: const Text("حفظ"),
           ),
         ],
       ),
@@ -238,18 +201,7 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
   }
 
   Future<void> _deleteProduct(String id, String name) async {
-    bool confirm = await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("تأكيد الحذف"),
-        content: Text("هل تريد حذف المنتج $name نهائياً؟"),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("تراجع")),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("حذف", style: TextStyle(color: Colors.red))),
-        ],
-      ),
-    );
-    if (confirm) await FirebaseFirestore.instance.collection('products').doc(id).delete();
+    await FirebaseFirestore.instance.collection('products').doc(id).delete();
   }
 }
 
