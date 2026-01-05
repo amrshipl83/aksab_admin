@@ -21,7 +21,7 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
       length: 3,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text("إدارة وطلبات الدليفري"),
+          title: const Text("إدارة وطلبات الدليفري", style: TextStyle(fontFamily: 'Tajawal')),
           centerTitle: true,
           bottom: const TabBar(
             isScrollable: false,
@@ -34,9 +34,9 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
         ),
         body: TabBarView(
           children: [
-            _buildPendingTab(),   // التبويب الأول: المعلقين
-            _buildActiveTab(),    // التبويب الثاني: المفعلين
-            _buildReportsTab(),   // التبويب الثالث: التقارير
+            _buildPendingTab(),
+            _buildActiveTab(),
+            _buildReportsTab(),
           ],
         ),
       ),
@@ -48,6 +48,7 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
     return StreamBuilder<QuerySnapshot>(
       stream: _service.getPendingRequests(),
       builder: (context, snapshot) {
+        if (snapshot.hasError) return Center(child: Text("خطأ: ${snapshot.error}"));
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -77,6 +78,7 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
     return StreamBuilder<QuerySnapshot>(
       stream: _service.getActiveSupermarkets(),
       builder: (context, snapshot) {
+        if (snapshot.hasError) return Center(child: Text("خطأ: ${snapshot.error}"));
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -111,7 +113,7 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
     );
   }
 
-  // 3. تبويب تقارير الطلبات (بجدول بيانات)
+  // 3. تبويب تقارير الطلبات المصحح (منع الشاشة الرمادية)
   Widget _buildReportsTab() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -119,6 +121,7 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
           .orderBy('orderDate', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
+        if (snapshot.hasError) return Center(child: Text("خطأ في البيانات: ${snapshot.error}"));
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -126,39 +129,59 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
           return const Center(child: Text("لا توجد تقارير طلبات حالياً"));
         }
 
-        return SingleChildScrollView(
-          scrollDirection: Axis.vertical,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              columns: const [
-                DataColumn(label: Text("الماركت")),
-                DataColumn(label: Text("الإجمالي")),
-                DataColumn(label: Text("التاريخ")),
-                DataColumn(label: Text("التفاصيل")),
-              ],
-              rows: snapshot.data!.docs.map((doc) {
-                var order = doc.data() as Map<String, dynamic>;
-                return DataRow(cells: [
-                  DataCell(Text(order['supermarketName'] ?? 'N/A')),
-                  DataCell(Text("${order['finalAmount']} ج.م")),
-                  DataCell(Text(order['orderDate'] != null 
-                    ? (order['orderDate'] as Timestamp).toDate().toString().substring(0, 16) 
-                    : 'N/A')),
-                  DataCell(IconButton(
-                    icon: const Icon(Icons.remove_red_eye, color: Colors.blue),
-                    onPressed: () => _showOrderDetails(order),
-                  )),
-                ]);
-              }).toList(),
-            ),
-          ),
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              scrollDirection: Axis.vertical,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                  child: DataTable(
+                    columnSpacing: 15,
+                    columns: const [
+                      DataColumn(label: Text("الماركت")),
+                      DataColumn(label: Text("الإجمالي")),
+                      DataColumn(label: Text("التاريخ")),
+                      DataColumn(label: Text("التفاصيل")),
+                    ],
+                    rows: snapshot.data!.docs.map((doc) {
+                      var order = doc.data() as Map<String, dynamic>;
+                      
+                      // حماية البيانات لتجنب الـ Null Exception
+                      String market = order['supermarketName']?.toString() ?? 'N/A';
+                      String total = "${order['finalAmount'] ?? 0} ج.م";
+                      String dateStr = 'N/A';
+                      
+                      if (order['orderDate'] != null && order['orderDate'] is Timestamp) {
+                        try {
+                          dateStr = (order['orderDate'] as Timestamp).toDate().toString().substring(0, 16);
+                        } catch (e) {
+                          dateStr = "خطأ في التاريخ";
+                        }
+                      }
+
+                      return DataRow(cells: [
+                        DataCell(Text(market)),
+                        DataCell(Text(total)),
+                        DataCell(Text(dateStr)),
+                        DataCell(IconButton(
+                          icon: const Icon(Icons.remove_red_eye, color: Colors.blue),
+                          onPressed: () => _showOrderDetails(order),
+                        )),
+                      ]);
+                    }).toList(),
+                  ),
+                ),
+              ),
+            );
+          },
         );
       },
     );
   }
 
-  // --- دوال التحكم والمناطق المنبثقة ---
+  // --- دوال التحكم ---
 
   void _openApprovalDialog(SupermarketModel request) {
     showDialog(
@@ -189,9 +212,14 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
     bool confirm = await _showConfirmDialog();
     if (confirm) {
       _showLoading();
-      await _service.deletePendingRequest(requestId);
-      _hideLoading();
-      _showSnackBar("تم رفض الطلب", Colors.orange);
+      try {
+        await _service.deletePendingRequest(requestId);
+        _hideLoading();
+        _showSnackBar("تم رفض الطلب بنجاح", Colors.orange);
+      } catch (e) {
+        _hideLoading();
+        _showSnackBar("فشل الحذف: $e", Colors.red);
+      }
     }
   }
 
@@ -200,32 +228,36 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("تفاصيل الطلب"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("العميل: ${order['customerName'] ?? 'غير معروف'}"),
-            Text("العنوان: ${order['customerAddress'] ?? 'غير متوفر'}"),
-            const Divider(),
-            const Text("المنتجات:", style: TextStyle(fontWeight: FontWeight.bold)),
-            ...? (order['items'] as List?)?.map((item) => Text("- ${item['name']} x ${item['quantity']}")),
-            const Divider(),
-            Text("الإجمالي النهائي: ${order['finalAmount']} ج.م", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("العميل: ${order['customerName'] ?? 'غير معروف'}"),
+              Text("العنوان: ${order['customerAddress'] ?? 'غير متوفر'}"),
+              const Divider(),
+              const Text("المنتجات:", style: TextStyle(fontWeight: FontWeight.bold)),
+              ...? (order['items'] as List?)?.map((item) => Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text("- ${item['name'] ?? 'منتج'} x ${item['quantity'] ?? 0}"),
+              )),
+              const Divider(),
+              Text("الإجمالي النهائي: ${order['finalAmount'] ?? 0} ج.م", 
+                style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+            ],
+          ),
         ),
         actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("إغلاق"))],
       ),
     );
   }
 
-  // --- دوال المساعدة العامة ---
-
   void _showLoading() => showDialog(context: context, barrierDismissible: false, builder: (context) => const Center(child: CircularProgressIndicator()));
   void _hideLoading() => Navigator.pop(context);
   void _showSnackBar(String m, Color c) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), backgroundColor: c));
 
   Future<bool> _showConfirmDialog() async {
-    return await showDialog(context: context, builder: (context) => AlertDialog(
+    return await showDialog<bool>(context: context, builder: (context) => AlertDialog(
       title: const Text("تأكيد"),
       content: const Text("هل أنت متأكد من رفض هذا الطلب؟"),
       actions: [
