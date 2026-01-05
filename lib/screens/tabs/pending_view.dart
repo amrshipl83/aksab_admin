@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:async';
-import 'package:rxdart/rxdart.dart'; // سنحتاج لمكتبة rxdart لدمج الـ Streams بسهولة
+import 'package:rxdart/rxdart.dart'; 
 
 class PendingView extends StatelessWidget {
   const PendingView({super.key});
@@ -10,21 +9,24 @@ class PendingView extends StatelessWidget {
   Widget build(BuildContext context) {
     final FirebaseFirestore db = FirebaseFirestore.instance;
 
-    // دمج Stream الخاص بالمديرين مع Stream الخاص بالمناديب كما في الـ HTML
     return StreamBuilder<List<QuerySnapshot>>(
       stream: CombineLatestStream.list([
+        // نجلب كل من في pendingManagers (مديرين ومشرفين)
         db.collection('pendingManagers').snapshots(),
-        db.collection('pendingReps').snapshots(),
+        // نجلب من pendingReps بشرط أن يكون مندوب مبيعات فقط
+        db.collection('pendingReps')
+          .where('role', isEqualTo: 'sales_rep') // الفلترة المطلوبة
+          .snapshots(),
       ]),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-        // تجميع كل المستندات من الكولكشنين في قائمة واحدة
+        // دمج النتائج في قائمة واحدة
         final allDocs = snapshot.data!.expand((snap) => snap.docs).toList();
 
         if (allDocs.isEmpty) {
           return const Center(
-            child: Text("لا توجد طلبات معلقة حالياً", style: TextStyle(fontFamily: 'Cairo')),
+            child: Text("لا توجد طلبات مبيعات معلقة", style: TextStyle(fontFamily: 'Cairo')),
           );
         }
 
@@ -35,7 +37,7 @@ class PendingView extends StatelessWidget {
             final doc = allDocs[index];
             final user = doc.data() as Map<String, dynamic>;
             final String docId = doc.id;
-            final String sourceCollection = doc.reference.parent.id; // معرفة المصدر (pendingManagers أم pendingReps)
+            final String sourceCollection = doc.reference.parent.id;
 
             return Card(
               elevation: 2,
@@ -74,18 +76,13 @@ class PendingView extends StatelessWidget {
     );
   }
 
-  // دالة الموافقة المطابقة للمنطق في HTML
   Future<void> _approveUser(BuildContext context, FirebaseFirestore db, String docId, Map<String, dynamic> data, String sourceCol) async {
     try {
-      // تحديد الكولكشن المستهدف بناءً على الدور
+      // المناديب يذهبون لـ salesRep والباقي لـ managers
       String targetCol = (data['role'] == 'sales_rep') ? 'salesRep' : 'managers';
       
-      // توليد الـ repCode للمناديب فقط (سواء مبيعات أو دليفري) كما في الـ HTML
-      String? repCode;
-      if (data['role'] == 'sales_rep' || data['role'] == 'delivery_rep') {
-        String prefix = (data['role'] == 'sales_rep') ? 'REP-' : 'DEL-';
-        repCode = prefix + docId;
-      }
+      // إنشاء كود المندوب
+      String? repCode = (data['role'] == 'sales_rep') ? "REP-$docId" : null;
 
       await db.collection(targetCol).doc(docId).set({
         ...data,
@@ -94,23 +91,22 @@ class PendingView extends StatelessWidget {
         'approvedAt': FieldValue.serverTimestamp(),
       });
 
-      // حذف من الكولكشن الأصلي (الذي جاء منه الطلب)
       await db.collection(sourceCol).doc(docId).delete();
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("تمت الموافقة بنجاح ونقل البيانات")),
+          const SnackBar(content: Text("تمت الموافقة ونقل المندوب بنجاح")),
         );
       }
     } catch (e) {
-      debugPrint("Error approving user: $e");
+      debugPrint("Error: $e");
     }
   }
 
   Future<void> _rejectUser(BuildContext context, FirebaseFirestore db, String docId, String sourceCol) async {
     await db.collection(sourceCol).doc(docId).delete();
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم الرفض والحذف")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم الحذف")));
     }
   }
 
