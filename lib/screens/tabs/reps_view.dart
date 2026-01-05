@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-// استيراد الشاشة التي أنشأناها للتو (تأكد من صحة المسار حسب مشروعك)
-import '../salary_detail_screen.dart'; 
+import '../salary_detail_screen.dart'; // الشاشة الجديدة التي صممناها
 
 class RepsView extends StatelessWidget {
   const RepsView({super.key});
@@ -9,21 +8,20 @@ class RepsView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      // نجلب بيانات المناديب من كولكشن salesRep كما في الـ HTML
+      // مراقبة كولكشن المناديب بشكل لحظي
       stream: FirebaseFirestore.instance.collection('salesRep').snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-
-        var docs = snapshot.data!.docs;
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
         
-        if (docs.isEmpty) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Center(
-            child: Text(
-              "لا يوجد مناديب مبيعات حالياً", 
-              style: TextStyle(fontFamily: 'Cairo'),
-            ),
+            child: Text("لا يوجد مناديب مبيعات حالياً", style: TextStyle(fontFamily: 'Cairo')),
           );
         }
+
+        var docs = snapshot.data!.docs;
 
         return ListView.builder(
           padding: const EdgeInsets.all(10),
@@ -31,7 +29,7 @@ class RepsView extends StatelessWidget {
           itemBuilder: (context, index) {
             var rep = docs[index].data() as Map<String, dynamic>;
             var repId = docs[index].id;
-            
+
             return Card(
               elevation: 2,
               margin: const EdgeInsets.symmetric(vertical: 5),
@@ -40,7 +38,6 @@ class RepsView extends StatelessWidget {
                   backgroundColor: Color(0xFF1A2C3D),
                   child: Icon(Icons.badge, color: Colors.white),
                 ),
-                // الاسم يعمل كرابط (Link) لفتح تفاصيل الراتب والأداء
                 title: InkWell(
                   onTap: () => _navigateToSalary(context, repId, rep['fullname'] ?? ''),
                   child: Text(
@@ -49,25 +46,12 @@ class RepsView extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                       color: Colors.blue,
                       decoration: TextDecoration.underline,
-                      fontFamily: 'Cairo',
+                      fontFamily: 'Cairo'
                     ),
                   ),
                 ),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "كود المندوب: ${rep['repCode'] ?? 'في انتظار التفعيل'}",
-                      style: const TextStyle(fontFamily: 'Cairo'),
-                    ),
-                    Text(
-                      rep['email'] ?? '', 
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                  ],
-                ),
+                subtitle: Text("كود المندوب: ${rep['repCode'] ?? 'غير معرف'}"),
                 trailing: const Icon(Icons.chevron_left),
-                // الضغط على أي مكان في الكارت يفتح أيضاً صفحة الرواتب
                 onTap: () => _navigateToSalary(context, repId, rep['fullname'] ?? ''),
               ),
             );
@@ -77,14 +61,14 @@ class RepsView extends StatelessWidget {
     );
   }
 
-  // هذه الدالة هي البديل المباشر لـ <a href="salary.html?id=...&type=rep">
   void _navigateToSalary(BuildContext context, String id, String name) {
+    // الانتقال هنا آمن تماماً ولا يسبب تجمد التطبيق
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => SalaryDetailScreen(
           employeeId: id,
-          employeeType: 'rep', // تحديد النوع كـ مندوب مبيعات
+          employeeType: 'rep', // تحديد النوع لضمان جلب البيانات الصحيحة
         ),
       ),
     );
