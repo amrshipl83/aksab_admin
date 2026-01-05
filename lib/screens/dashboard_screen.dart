@@ -7,8 +7,10 @@ import '../pages/management_page.dart';
 import '../pages/orders_report_page.dart';
 import '../pages/buyers_page.dart';
 import '../pages/sellers_page.dart';
-// استيراد الصفحة الجديدة
+
+// استيراد الشاشات الجديدة
 import '../screens/delivery_management_screen.dart';
+import '../screens/hr_management_screen.dart'; // تم إضافة الاستيراد هنا
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -148,7 +150,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 MaterialPageRoute(builder: (context) => const SellersPage()),
               );
             }),
-            // تم تفعيل الربط هنا
             _buildSidebarItem(Icons.local_shipping, "إدارة الدليفري", () {
               Navigator.push(
                 context,
@@ -156,7 +157,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
               );
             }),
             _buildSidebarItem(Icons.settings, "الإعدادات", () {}),
-            _buildSidebarItem(Icons.assignment_ind, "الموارد البشرية", () {}),
+            // تم تفعيل ربط الموارد البشرية هنا
+            _buildSidebarItem(Icons.assignment_ind, "الموارد البشرية", () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const HRManagementScreen()),
+              );
+            }),
             _buildSidebarItem(Icons.add_photo_alternate, "ادارة التسويق", () {}),
             _buildSidebarItem(Icons.warehouse, "ادارة المخازن والمشتريات", () {}),
             _buildSidebarItem(Icons.paid, "الإدارة المالية", () {}, color: const Color(0xFF10B981)),
@@ -170,8 +177,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildSidebarItem(IconData icon, String label, VoidCallback onTap,
-      {Color color = Colors.white}) {
+  Widget _buildSidebarItem(IconData icon, String label, VoidCallback onTap, {Color color = Colors.white}) {
     return InkWell(
       onTap: onTap,
       child: Padding(
