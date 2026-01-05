@@ -4,8 +4,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 // الربط بالصفحات
 import '../pages/management_page.dart';
-import '../pages/orders_report_page.dart'; 
-import '../pages/buyers_page.dart'; // استيراد صفحة العملاء الجديدة
+import '../pages/orders_report_page.dart';
+import '../pages/buyers_page.dart';
+import '../pages/sellers_page.dart'; // استيراد صفحة التجار الجديدة
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -133,14 +134,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 MaterialPageRoute(builder: (context) => const OrdersReportPage()),
               );
             }),
-            // ربط صفحة العملاء الجديدة (باستخدام const للأداء)
             _buildSidebarItem(Icons.group, "العملاء", () {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const BuyersPage()),
               );
             }),
-            _buildSidebarItem(Icons.storefront, "البائعين", () {}),
+            _buildSidebarItem(Icons.storefront, "البائعين", () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const SellersPage()),
+              );
+            }),
             _buildSidebarItem(Icons.local_shipping, "إدارة الدليفري", () {}),
             _buildSidebarItem(Icons.settings, "الإعدادات", () {}),
             _buildSidebarItem(Icons.assignment_ind, "الموارد البشرية", () {}),
