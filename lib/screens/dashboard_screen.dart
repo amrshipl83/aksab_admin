@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 // الربط بالصفحات
 import '../pages/management_page.dart';
-import '../pages/orders_report_page.dart'; // استيراد صفحة الطلبات الجديدة
+import '../pages/orders_report_page.dart'; 
+import '../pages/buyers_page.dart'; // استيراد صفحة العملاء الجديدة
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -122,7 +124,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _buildSidebarItem(Icons.add_box, "إضافة الأقسام والمنتجات", () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => ManagementPage()), // تم حذف const من هنا
+                MaterialPageRoute(builder: (context) => ManagementPage()),
               );
             }),
             _buildSidebarItem(Icons.inventory_2, "الطلبات", () {
@@ -131,7 +133,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 MaterialPageRoute(builder: (context) => const OrdersReportPage()),
               );
             }),
-            _buildSidebarItem(Icons.group, "العملاء", () {}),
+            // ربط صفحة العملاء الجديدة (باستخدام const للأداء)
+            _buildSidebarItem(Icons.group, "العملاء", () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const BuyersPage()),
+              );
+            }),
             _buildSidebarItem(Icons.storefront, "البائعين", () {}),
             _buildSidebarItem(Icons.local_shipping, "إدارة الدليفري", () {}),
             _buildSidebarItem(Icons.settings, "الإعدادات", () {}),
