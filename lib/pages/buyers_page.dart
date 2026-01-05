@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
 
 class BuyersPage extends StatefulWidget {
   const BuyersPage({super.key});
@@ -19,7 +18,6 @@ class _BuyersPageState extends State<BuyersPage> {
     _calculateTotalPurchases();
   }
 
-  // حساب إجمالي المشتريات من مجموعة orders
   Future<void> _calculateTotalPurchases() async {
     try {
       final ordersSnapshot = await FirebaseFirestore.instance.collection("orders").get();
@@ -27,7 +25,6 @@ class _BuyersPageState extends State<BuyersPage> {
 
       for (var doc in ordersSnapshot.docs) {
         final data = doc.data();
-        // الوصول لـ ID المشتري من داخل خريطة buyer
         final buyerData = data['buyer'] as Map<String, dynamic>?;
         final customerId = buyerData != null ? buyerData['id'] : null;
         final total = (data['total'] as num?)?.toDouble() ?? 0.0;
@@ -131,10 +128,11 @@ class _BuyersPageState extends State<BuyersPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.between,
               children: [
-                Text(customer['fullname'] ?? "اسم غير متاح", 
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, fontFamily: 'Tajawal')),
+                Expanded(
+                  child: Text(customer['fullname'] ?? "اسم غير متاح", 
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, fontFamily: 'Tajawal')),
+                ),
                 _buildStatusBadge(status),
               ],
             ),
@@ -151,7 +149,8 @@ class _BuyersPageState extends State<BuyersPage> {
               children: [
                 const Icon(Icons.shopping_cart, size: 16, color: Colors.green),
                 const SizedBox(width: 8),
-                Text("إجمالي المشتريات: ${NumberFormat.currency(symbol: '', decimalDigits: 2).format(totalSpent)} ج.م",
+                // تم استبدال NumberFormat بطريقة يدوية لضمان عمل الكود
+                Text("إجمالي المشتريات: ${totalSpent.toStringAsFixed(2)} ج.م",
                   style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
               ],
             ),
@@ -209,7 +208,9 @@ class _BuyersPageState extends State<BuyersPage> {
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: customer['status'] == 'inactive' ? Colors.green : Colors.red),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: customer['status'] == 'inactive' ? Colors.green : Colors.red,
+                    ),
                     onPressed: () => _toggleStatus(id, customer['status']),
                     child: Text(customer['status'] == 'inactive' ? "تنشيط الحساب" : "تعطيل الحساب", style: const TextStyle(color: Colors.white)),
                   ),
@@ -240,7 +241,10 @@ class _BuyersPageState extends State<BuyersPage> {
 
   String _formatDate(dynamic date) {
     if (date == null) return "غير معروف";
-    if (date is Timestamp) return DateFormat('yyyy-MM-dd').format(date.toDate());
+    if (date is Timestamp) {
+      DateTime dt = date.toDate();
+      return "${dt.year}-${dt.month}-${dt.day}";
+    }
     return date.toString();
   }
 
