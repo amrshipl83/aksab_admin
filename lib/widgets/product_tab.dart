@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+// استيراد صفحة التقارير للربط
+import '../pages/products_report_page.dart';
 
 class ProductTab extends StatefulWidget {
   const ProductTab({super.key});
@@ -133,12 +135,12 @@ class _ProductTabState extends State<ProductTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // الزرار الاحترافي للانتقال لتقرير المنتجات
+          // الزرار الاحترافي للانتقال لتقرير المنتجات المربوط فعلياً
           InkWell(
             onTap: () {
-              // سيتم الربط هنا لاحقاً بصفحة التقارير
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("جاري تجهيز صفحة كتالوج المنتجات...")),
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProductsReportPage()),
               );
             },
             child: Container(
@@ -204,12 +206,12 @@ class _ProductTabState extends State<ProductTab> {
           ),
           const SizedBox(height: 10),
 
-          // اختيار القسم الفرعي - تم تصحيح الـ where هنا
+          // اختيار القسم الفرعي - المصحح
           if (selectedMainId != null)
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('subCategory')
-                  .where('mainId', isEqualTo: selectedMainId) // التصحيح هنا
+                  .where('mainId', isEqualTo: selectedMainId)
                   .snapshots(),
               builder: (context, snapshot) {
                 return DropdownButtonFormField<String>(
