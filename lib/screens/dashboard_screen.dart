@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-// الربط بصفحة الإدارة
+// الربط بالصفحات
 import '../pages/management_page.dart';
+import '../pages/orders_report_page.dart'; // استيراد صفحة الطلبات الجديدة
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -56,22 +57,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF2F4F8),
-      appBar: isMobile ? AppBar(
-        title: const Text("لوحة التحكم", style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFF1F2937),
-        foregroundColor: Colors.white,
-      ) : null,
-
+      appBar: isMobile
+          ? AppBar(
+              title: const Text("لوحة التحكم",
+                  style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
+              backgroundColor: const Color(0xFF1F2937),
+              foregroundColor: Colors.white,
+            )
+          : null,
       drawer: isMobile ? Drawer(child: _buildSidebarContent(context)) : null,
-
       body: Row(
         children: [
-          if (!isMobile) Container(
-            width: 90,
-            color: const Color(0xFF1F2937),
-            child: _buildSidebarContent(context),
-          ),
-
+          if (!isMobile)
+            Container(
+              width: 90,
+              color: const Color(0xFF1F2937),
+              child: _buildSidebarContent(context),
+            ),
           Expanded(
             child: SingleChildScrollView(
               padding: EdgeInsets.all(isMobile ? 15 : 30),
@@ -87,7 +89,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                   const SizedBox(height: 25),
-
                   GridView.count(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
@@ -118,14 +119,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Column(
           children: [
             const SizedBox(height: 20),
-            // تعديل السطر 125 المسبب للمشكلة
             _buildSidebarItem(Icons.add_box, "إضافة الأقسام والمنتجات", () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => ManagementPage()),
+                MaterialPageRoute(builder: (context) => const ManagementPage()),
               );
             }),
-            _buildSidebarItem(Icons.inventory_2, "الطلبات", () {}),
+            // ربط أيقونة الطلبات بصفحة تقرير الطلبات
+            _buildSidebarItem(Icons.inventory_2, "الطلبات", () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const OrdersReportPage()),
+              );
+            }),
             _buildSidebarItem(Icons.group, "العملاء", () {}),
             _buildSidebarItem(Icons.storefront, "البائعين", () {}),
             _buildSidebarItem(Icons.local_shipping, "إدارة الدليفري", () {}),
@@ -144,7 +150,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildSidebarItem(IconData icon, String label, VoidCallback onTap, {Color color = Colors.white}) {
+  Widget _buildSidebarItem(IconData icon, String label, VoidCallback onTap,
+      {Color color = Colors.white}) {
     return InkWell(
       onTap: onTap,
       child: Padding(
