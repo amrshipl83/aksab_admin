@@ -19,24 +19,41 @@ class AddProductsDialog extends StatefulWidget {
 
 class _AddProductsDialogState extends State<AddProductsDialog> {
   String? selectedMainCat, selectedSubCat, selectedProduct, productName;
-  final TextEditingController _unitNameController = TextEditingController();
+  String? selectedUnit; // الوحدة المختارة من قائمة وحدات المنتج
+  List<dynamic> availableUnits = []; // الوحدات القادمة من الفايربيز للمنتج المختار
+
   final TextEditingController _priceController = TextEditingController();
-  final TextEditingController _piecesController = TextEditingController();
   
   List<Map<String, dynamic>> currentProductUnits = []; 
   List<Map<String, dynamic>> finalProductsToUpload = []; 
 
+  // جلب بيانات المنتج المختار لمعرفة وحداته المسجلة (كما يفعل الـ HTML)
+  void _onProductChanged(String id, String name) async {
+    setState(() {
+      selectedProduct = id;
+      productName = name;
+      availableUnits = [];
+      selectedUnit = null;
+    });
+
+    var productDoc = await FirebaseFirestore.instance.collection('products').doc(id).get();
+    if (productDoc.exists && productDoc.data()!['units'] != null) {
+      setState(() {
+        availableUnits = productDoc.data()!['units']; // جلب المصفوفة من الفايربيز
+      });
+    }
+  }
+
   void _addUnitToProduct() {
-    if (_unitNameController.text.isEmpty || _priceController.text.isEmpty) return;
+    if (selectedUnit == null || _priceController.text.isEmpty) return;
     setState(() {
       currentProductUnits.add({
-        'unitName': _unitNameController.text,
+        'unitName': selectedUnit,
         'price': double.parse(_priceController.text),
-        'pieces': int.tryParse(_piecesController.text) ?? 1,
+        'pieces': 1, // القيمة الافتراضية كما في المنطق البرمي
       });
-      _unitNameController.clear();
       _priceController.clear();
-      _piecesController.clear();
+      selectedUnit = null;
     });
   }
 
@@ -45,23 +62,23 @@ class _AddProductsDialogState extends State<AddProductsDialog> {
     setState(() {
       finalProductsToUpload.add({
         'productId': selectedProduct,
-        'productName': productName ?? "منتج",
+        'productName': productName,
         'units': List.from(currentProductUnits),
       });
       currentProductUnits.clear();
       selectedProduct = null;
+      availableUnits = [];
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text("تسعير منتجات ${widget.supermarketName}", style: const TextStyle(fontFamily: 'Tajawal')),
+      title: Text("إعداد منتجات ${widget.supermarketName}"),
       content: SizedBox(
         width: 600,
         child: SingleChildScrollView(
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             children: [
               _buildFirebaseDropdown("القسم الرئيسي", "mainCategory", (val, name) {
                 setState(() { selectedMainCat = val; selectedSubCat = null; });
@@ -72,55 +89,48 @@ class _AddProductsDialogState extends State<AddProductsDialog> {
                 }, filterField: "mainId", filterValue: selectedMainCat),
               if (selectedSubCat != null)
                 _buildFirebaseDropdown("المنتج", "products", (val, name) {
-                  setState(() { selectedProduct = val; productName = name; });
+                  _onProductChanged(val, name);
                 }, filterField: "subId", filterValue: selectedSubCat),
 
               if (selectedProduct != null) ...[
-                const Divider(height: 30, color: Colors.blue),
-                const Text("إضافة الوحدات (مثل الـ HTML)", style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(child: TextField(controller: _unitNameController, decoration: const InputDecoration(labelText: "اسم الوحدة (كرتونة/قطعة)"))),
-                    const SizedBox(width: 5),
-                    Expanded(child: TextField(controller: _priceController, decoration: const InputDecoration(labelText: "السعر"), keyboardType: TextInputType.number)),
-                    const SizedBox(width: 5),
-                    Expanded(child: TextField(controller: _piecesController, decoration: const InputDecoration(labelText: "القطع"), keyboardType: TextInputType.number)),
-                    IconButton(icon: const Icon(Icons.add_circle, color: Colors.green, size: 30), onPressed: _addUnitToProduct),
-                  ],
+                const Divider(color: Colors.blue),
+                // قائمة الوحدات (تظهر فقط الوحدات المسجلة لهذا المنتج في السيستم)
+                DropdownButtonFormField<String>(
+                  value: selectedUnit,
+                  decoration: const InputDecoration(labelText: "اختر الوحدة المسجلة لهذا المنتج"),
+                  items: availableUnits.map((u) => DropdownMenuItem<String>(
+                    value: u['unitName'].toString(),
+                    child: Text(u['unitName'].toString()),
+                  )).toList(),
+                  onChanged: (val) => setState(() => selectedUnit = val),
                 ),
+                TextField(
+                  controller: _priceController,
+                  decoration: const InputDecoration(labelText: "السعر لهذا السوبر ماركت"),
+                  keyboardType: TextInputType.number,
+                ),
+                ElevatedButton(onPressed: _addUnitToProduct, child: const Text("إضافة الوحدة")),
                 
-                // --- الجزء الذي تمت إضافته لعرض الوحدات فوراً ---
-                const SizedBox(height: 10),
                 Wrap(
-                  spacing: 8.0,
                   children: currentProductUnits.map((u) => Chip(
-                    backgroundColor: Colors.blue.shade50,
-                    label: Text("${u['unitName']}: ${u['price']} ج.م (${u['pieces']} قطعة)"),
+                    label: Text("${u['unitName']}: ${u['price']} ج.م"),
                     onDeleted: () => setState(() => currentProductUnits.remove(u)),
-                    deleteIconColor: Colors.red,
                   )).toList(),
                 ),
-                // --------------------------------------------
-
-                const SizedBox(height: 15),
-                ElevatedButton.icon(
+                
+                const SizedBox(height: 10),
+                ElevatedButton(
                   onPressed: currentProductUnits.isEmpty ? null : _saveProductToList,
-                  icon: const Icon(Icons.save),
-                  label: const Text("حفظ هذا المنتج في القائمة"),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                  child: const Text("حفظ المنتج والوحدات"),
                 ),
               ],
               
-              const Divider(height: 40, thickness: 2),
-              const Text("القائمة النهائية للموافقة", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-              ...finalProductsToUpload.map((p) => Card(
-                color: Colors.grey.shade100,
-                child: ListTile(
-                  title: Text(p['productName'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text("الوحدات: ${p['units'].map((u) => u['unitName']).join(' - ')}"),
-                  trailing: IconButton(icon: const Icon(Icons.delete_forever, color: Colors.red), onPressed: () => setState(() => finalProductsToUpload.remove(p))),
-                ),
+              const Divider(height: 30),
+              ...finalProductsToUpload.map((p) => ListTile(
+                title: Text(p['productName']),
+                subtitle: Text("تم تسعير ${p['units'].length} وحدات"),
+                trailing: IconButton(icon: const Icon(Icons.delete), onPressed: () => setState(() => finalProductsToUpload.remove(p))),
               )),
             ],
           ),
@@ -130,8 +140,7 @@ class _AddProductsDialogState extends State<AddProductsDialog> {
         TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
         ElevatedButton(
           onPressed: finalProductsToUpload.isEmpty ? null : () => widget.onConfirm(finalProductsToUpload),
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
-          child: const Text("تفعيل وتدشين الماركت"),
+          child: const Text("موافقة نهائية وتفعيل"),
         ),
       ],
     );
@@ -150,9 +159,8 @@ class _AddProductsDialogState extends State<AddProductsDialog> {
           decoration: InputDecoration(labelText: label),
           items: docs.map((doc) => DropdownMenuItem(value: doc.id, child: Text(doc['name'] ?? ''))).toList(),
           onChanged: (val) {
-            if (val == null) return;
             var doc = docs.firstWhere((d) => d.id == val);
-            onChanged(val, doc['name']);
+            onChanged(val!, doc['name']);
           },
         );
       },
