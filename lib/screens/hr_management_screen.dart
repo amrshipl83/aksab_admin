@@ -1,38 +1,57 @@
 import 'package:flutter/material.dart';
+import 'sales_management_screen.dart'; // استيراد صفحة المبيعات الجديدة
 
 class HRManagementScreen extends StatelessWidget {
   const HRManagementScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // تحديد عرض الشاشة لضبط التصميم
+    double screenWidth = MediaQuery.of(context).size.width;
+    bool isMobile = screenWidth < 800;
+
     return Scaffold(
       backgroundColor: const Color(0xFFEEF2F5),
       appBar: AppBar(
-        title: const Text("الموارد البشرية", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+          "الموارد البشرية",
+          style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+        ),
         centerTitle: true,
         backgroundColor: const Color(0xFF1A2C3D),
         foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: Padding(
-        padding: const EdgeInsets.all(20.0),
+        padding: EdgeInsets.all(isMobile ? 15.0 : 30.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               "مرحباً بك في لوحة تحكم الإدارة",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF333D47)),
+              style: TextStyle(
+                fontSize: isMobile ? 18 : 24,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF333D47),
+                fontFamily: 'Cairo',
+              ),
             ),
             const SizedBox(height: 10),
-            const Text("اختر القسم الذي تود إدارته من الأسفل:"),
+            const Text(
+              "اختر القسم الذي تود إدارته من الأسفل:",
+              style: TextStyle(fontFamily: 'Cairo', color: Colors.grey),
+            ),
             const SizedBox(height: 30),
             
-            // شبكة الكروت
+            // شبكة الكروت المتوافقة مع الشاشات
             Expanded(
               child: GridView.count(
-                crossAxisCount: MediaQuery.of(context).size.width > 800 ? 3 : 1, // 3 كروت في الويب و 1 في الموبايل
+                // 3 أعمدة للويب و 1 للموبايل
+                crossAxisCount: isMobile ? 1 : 3,
                 crossAxisSpacing: 20,
                 mainAxisSpacing: 20,
-                childAspectRatio: 1.5,
+                // ضبط نسبة الطول للعرض لتناسب المحتوى
+                childAspectRatio: isMobile ? 2.0 : 1.3,
                 children: [
                   _buildHRCard(
                     context,
@@ -40,7 +59,9 @@ class HRManagementScreen extends StatelessWidget {
                     subtitle: "إدارة المديرين والمشرفين",
                     icon: Icons.admin_panel_settings,
                     color: Colors.blue,
-                    onTap: () => Navigator.pushNamed(context, '/add-employ'),
+                    onTap: () {
+                      // سيتم ربطها لاحقاً
+                    },
                   ),
                   _buildHRCard(
                     context,
@@ -48,7 +69,13 @@ class HRManagementScreen extends StatelessWidget {
                     subtitle: "إدارة مناديب المبيعات والتارجت",
                     icon: Icons.trending_up,
                     color: Colors.orange,
-                    onTap: () => Navigator.pushNamed(context, '/human-sales'),
+                    onTap: () {
+                      // الربط الفعلي مع الصفحة الجديدة المقسمة
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const SalesManagementScreen()),
+                      );
+                    },
                   ),
                   _buildHRCard(
                     context,
@@ -56,7 +83,9 @@ class HRManagementScreen extends StatelessWidget {
                     subtitle: "إدارة المحصلين وسائقي التوصيل",
                     icon: Icons.local_shipping,
                     color: Colors.green,
-                    onTap: () => Navigator.pushNamed(context, '/human-delivery'),
+                    onTap: () {
+                      // سيتم ربطها لاحقاً
+                    },
                   ),
                 ],
               ),
@@ -67,18 +96,27 @@ class HRManagementScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildHRCard(BuildContext context, 
-      {required String title, required String subtitle, required IconData icon, required Color color, required VoidCallback onTap}) {
+  Widget _buildHRCard(BuildContext context,
+      {required String title,
+      required String subtitle,
+      required IconData icon,
+      required Color color,
+      required VoidCallback onTap}) {
     return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(15),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(15),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 5)),
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
           ],
-          border: Border(top: BorderSide(color: color, width: 5)), // شريط علوي ملون يعطي لمسة جمالية
+          border: Border(top: BorderSide(color: color, width: 5)),
         ),
         child: Padding(
           padding: const EdgeInsets.all(20.0),
@@ -87,11 +125,26 @@ class HRManagementScreen extends StatelessWidget {
             children: [
               Icon(icon, size: 50, color: color),
               const SizedBox(height: 15),
-              Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 5),
-              Text(subtitle, textAlign: TextAlign.center, style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Cairo',
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontSize: 13,
+                  fontFamily: 'Cairo',
+                ),
+              ),
               const SizedBox(height: 15),
-              const Icon(Icons.arrow_circle_left_outlined, color: Colors.grey),
+              Icon(Icons.arrow_circle_left_outlined, color: color.withOpacity(0.5)),
             ],
           ),
         ),
