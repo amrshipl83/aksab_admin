@@ -9,10 +9,16 @@ class ManagersView extends StatelessWidget {
     final FirebaseFirestore db = FirebaseFirestore.instance;
 
     return StreamBuilder<QuerySnapshot>(
-      stream: db.collection('managers').where('role', '==', 'sales_manager').snapshots(),
+      // التصحيح الأول: تعديل الـ where لتستخدم المعامل المسمى isEqualTo
+      stream: db
+          .collection('managers')
+          .where('role', isEqualTo: 'sales_manager')
+          .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         var docs = snapshot.data!.docs;
+
+        if (docs.isEmpty) return const Center(child: Text("لا يوجد مديرو مبيعات حالياً"));
 
         return ListView.builder(
           padding: const EdgeInsets.all(10),
@@ -23,11 +29,14 @@ class ManagersView extends StatelessWidget {
 
             return Card(
               child: ListTile(
-                leading: const CircleAvatar(backgroundColor: Color(0xFF1A2C3D), child: Icon(Icons.person, color: Colors.white)),
-                title: Text(manager['fullname'] ?? ''),
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFF1A2C3D),
+                  child: Icon(Icons.person, color: Colors.white),
+                ),
+                title: Text(manager['fullname'] ?? 'بدون اسم'),
                 subtitle: Text("الهدف: ${manager['targetAmount'] ?? 0}"),
                 trailing: const Icon(Icons.edit_note, color: Colors.orange),
-                onTap: () => _showAssignmentDialog(context, db, managerId, manager['fullname']),
+                onTap: () => _showAssignmentDialog(context, db, managerId, manager['fullname'] ?? ''),
               ),
             );
           },
@@ -37,46 +46,69 @@ class ManagersView extends StatelessWidget {
   }
 
   void _showAssignmentDialog(BuildContext context, FirebaseFirestore db, String managerId, String name) async {
-    var allSups = await db.collection('managers').where('role', '==', 'sales_supervisor').get();
-    
+    // التصحيح الثاني: تعديل الـ where هنا أيضاً لجلب المشرفين بشكل صحيح
+    var allSups = await db
+        .collection('managers')
+        .where('role', isEqualTo: 'sales_supervisor')
+        .get();
+
+    if (!context.mounted) return;
+
     showDialog(
       context: context,
       builder: (context) {
         List<String> selectedIds = [];
-        // تحديد من يتبع هذا المدير حالياً
+        // تحديد من يتبع هذا المدير حالياً بناءً على الحقل المرجعي managerId
         for (var doc in allSups.docs) {
-          if (doc.data()['managerId'] == managerId) selectedIds.add(doc.id);
+          final data = doc.data() as Map<String, dynamic>;
+          if (data['managerId'] == managerId) {
+            selectedIds.add(doc.id);
+          }
         }
 
         return StatefulBuilder(
           builder: (context, setState) => AlertDialog(
-            title: Text("تعيين مشرفين لـ $name"),
+            title: Text("تعيين مشرفين لـ $name", style: const TextStyle(fontFamily: 'Cairo')),
             content: SizedBox(
               width: double.maxFinite,
-              child: ListView(
-                shrinkWrap: true,
-                children: allSups.docs.map((doc) {
-                  return CheckboxListTile(
-                    title: Text(doc.data()['fullname'] ?? ''),
-                    value: selectedIds.contains(doc.id),
-                    onChanged: (val) {
-                      setState(() => val! ? selectedIds.add(doc.id) : selectedIds.remove(doc.id));
-                    },
-                  );
-                }).toList(),
-              ),
+              child: allSups.docs.isEmpty
+                  ? const Text("لا يوجد مشرفون متاحون حالياً")
+                  : ListView(
+                      shrinkWrap: true,
+                      children: allSups.docs.map((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        return CheckboxListTile(
+                          title: Text(data['fullname'] ?? 'بدون اسم'),
+                          value: selectedIds.contains(doc.id),
+                          onChanged: (val) {
+                            setState(() {
+                              if (val == true) {
+                                selectedIds.add(doc.id);
+                              } else {
+                                selectedIds.remove(doc.id);
+                              }
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
             ),
             actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("إلغاء"),
+              ),
               ElevatedButton(
                 onPressed: () async {
                   WriteBatch batch = db.batch();
+                  // تحديث حقل managerId في مستندات المشرفين بناءً على الاختيار
                   for (var doc in allSups.docs) {
                     batch.update(doc.reference, {
                       'managerId': selectedIds.contains(doc.id) ? managerId : null
                     });
                   }
                   await batch.commit();
-                  Navigator.pop(context);
+                  if (context.mounted) Navigator.pop(context);
                 },
                 child: const Text("حفظ التغييرات"),
               )

@@ -9,17 +9,30 @@ class SupervisorsView extends StatelessWidget {
     final FirebaseFirestore db = FirebaseFirestore.instance;
 
     return StreamBuilder<QuerySnapshot>(
-      stream: db.collection('managers').where('role', '==', 'sales_supervisor').snapshots(),
+      // التصحيح هنا: استخدام isEqualTo بدلاً من الفواصل العادية
+      stream: db
+          .collection('managers')
+          .where('role', isEqualTo: 'sales_supervisor')
+          .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        
+        var docs = snapshot.data!.docs;
+        
+        if (docs.isEmpty) {
+          return const Center(child: Text("لا يوجد مشرفون مسجلون حالياً"));
+        }
+
         return ListView.builder(
           padding: const EdgeInsets.all(10),
-          itemCount: snapshot.data!.docs.length,
+          itemCount: docs.length,
           itemBuilder: (context, index) {
-            var sup = snapshot.data!.docs[index];
+            var sup = docs[index];
             return Card(
               child: ListTile(
-                title: Text(sup['fullname'] ?? ''),
+                title: Text(sup['fullname'] ?? 'بدون اسم'),
                 subtitle: const Text("اضغط لتعيين المناديب"),
                 trailing: const Icon(Icons.handshake),
                 onTap: () => _showRepsDialog(context, db, sup.id, sup['fullname']),
@@ -32,43 +45,66 @@ class SupervisorsView extends StatelessWidget {
   }
 
   void _showRepsDialog(BuildContext context, FirebaseFirestore db, String supId, String name) async {
+    // جلب قائمة المناديب
     var allReps = await db.collection('salesRep').get();
+    
+    if (!context.mounted) return;
+
     showDialog(
       context: context,
       builder: (context) {
+        // تحديد المناديب التابعين لهذا المشرف حالياً بناءً على حقل supervisorId
         List<String> selectedIds = allReps.docs
-            .where((doc) => doc.data()['supervisorId'] == supId)
-            .map((doc) => doc.id).toList();
+            .where((doc) {
+              final data = doc.data() as Map<String, dynamic>;
+              return data['supervisorId'] == supId;
+            })
+            .map((doc) => doc.id)
+            .toList();
 
         return StatefulBuilder(
           builder: (context, setState) => AlertDialog(
-            title: Text("تعيين مناديب لـ $name"),
+            title: Text("تعيين مناديب لـ $name", style: const TextStyle(fontFamily: 'Cairo')),
             content: SizedBox(
               width: double.maxFinite,
-              child: ListView(
-                shrinkWrap: true,
-                children: allReps.docs.map((doc) {
-                  return CheckboxListTile(
-                    title: Text(doc.data()['fullname'] ?? ''),
-                    value: selectedIds.contains(doc.id),
-                    onChanged: (val) {
-                      setState(() => val! ? selectedIds.add(doc.id) : selectedIds.remove(doc.id));
-                    },
-                  );
-                }).toList(),
-              ),
+              child: allReps.docs.isEmpty 
+                ? const Text("لا يوجد مناديب متاحين")
+                : ListView(
+                    shrinkWrap: true,
+                    children: allReps.docs.map((doc) {
+                      var repData = doc.data() as Map<String, dynamic>;
+                      return CheckboxListTile(
+                        title: Text(repData['fullname'] ?? 'بدون اسم'),
+                        value: selectedIds.contains(doc.id),
+                        onChanged: (val) {
+                          setState(() {
+                            if (val == true) {
+                              selectedIds.add(doc.id);
+                            } else {
+                              selectedIds.remove(doc.id);
+                            }
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
             ),
             actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("إلغاء"),
+              ),
               ElevatedButton(
                 onPressed: () async {
                   WriteBatch batch = db.batch();
+                  // تحديث حقل supervisorId لكل المندوبين
                   for (var doc in allReps.docs) {
                     batch.update(doc.reference, {
                       'supervisorId': selectedIds.contains(doc.id) ? supId : null
                     });
                   }
                   await batch.commit();
-                  Navigator.pop(context);
+                  if (context.mounted) Navigator.pop(context);
                 },
                 child: const Text("حفظ"),
               )
