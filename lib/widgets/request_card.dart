@@ -6,20 +6,34 @@ class RequestCard extends StatelessWidget {
   final VoidCallback onApprove;
   final VoidCallback onReject;
 
-  const RequestCard({super.key, required this.request, required this.onApprove, required this.onReject});
+  const RequestCard({
+    super.key, 
+    required this.request, 
+    required this.onApprove, 
+    required this.onReject
+  });
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.all(10),
+      margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
+      elevation: 4,
       child: ListTile(
         title: Text(request.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text("العنوان: ${request.address}\nالتوصيل: ${request.deliveryFee} ج.م"),
+        subtitle: Text("العنوان: ${request.address}\nمصاريف التوصيل: ${request.deliveryFee} ج.م"),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(icon: const Icon(Icons.check_circle, color: Colors.green), onPressed: onApprove),
-            IconButton(icon: const Icon(Icons.cancel, color: Colors.red), onPressed: onReject),
+            // زر المراجعة والموافقة
+            IconButton(
+              icon: const Icon(Icons.fact_check, color: Colors.green, size: 30),
+              onPressed: onApprove, // تأكد أن هذه ليست فارغة
+            ),
+            // زر الرفض
+            IconButton(
+              icon: const Icon(Icons.delete_forever, color: Colors.red, size: 30),
+              onPressed: onReject,
+            ),
           ],
         ),
       ),

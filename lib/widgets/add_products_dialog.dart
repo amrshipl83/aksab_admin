@@ -29,7 +29,7 @@ class _AddProductsDialogState extends State<AddProductsDialog> {
     return AlertDialog(
       title: Text("إضافة منتجات لـ ${widget.supermarketName}"),
       content: SizedBox(
-        width: double.maxFinite,
+        width: 500, // تحديد عرض ثابت لضمان الظهور في الويب
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -46,18 +46,20 @@ class _AddProductsDialogState extends State<AddProductsDialog> {
                   setState(() { selectedProduct = val; });
                 }, filterField: "subId", filterValue: selectedSubCat),
               if (selectedProduct != null) ...[
+                const SizedBox(height: 10),
                 TextField(
                   controller: _priceController,
-                  decoration: const InputDecoration(labelText: "السعر (EGP)"),
+                  decoration: const InputDecoration(labelText: "السعر (EGP)", border: OutlineInputBorder()),
                   keyboardType: TextInputType.number,
                 ),
+                const SizedBox(height: 10),
                 ElevatedButton(onPressed: _addProductToList, child: const Text("إضافة للقائمة")),
               ],
               const Divider(),
               ...selectedProductsList.map((p) => ListTile(
                     title: Text(p['productName']),
                     subtitle: Text("${p['units'][0]['price']} ج.م"),
-                    trailing: IconButton(icon: const Icon(Icons.delete), onPressed: () => setState(() => selectedProductsList.remove(p))),
+                    trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => setState(() => selectedProductsList.remove(p))),
                   )),
             ],
           ),
@@ -76,6 +78,7 @@ class _AddProductsDialogState extends State<AddProductsDialog> {
   Widget _buildDropdown(String label, String collection, Function(String?) onChanged, {String? filterField, String? filterValue}) {
     Query query = FirebaseFirestore.instance.collection(collection);
     if (filterField != null) query = query.where(filterField, isEqualTo: filterValue);
+    
     return StreamBuilder<QuerySnapshot>(
       stream: query.snapshots(),
       builder: (context, snapshot) {
@@ -98,6 +101,7 @@ class _AddProductsDialogState extends State<AddProductsDialog> {
         'units': [{'price': double.parse(_priceController.text), 'unitName': 'وحدة'}],
       });
       _priceController.clear();
+      selectedProduct = null;
     });
   }
 }
