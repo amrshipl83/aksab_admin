@@ -122,10 +122,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _buildSidebarItem(Icons.add_box, "إضافة الأقسام والمنتجات", () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const ManagementPage()),
+                MaterialPageRoute(builder: (context) => ManagementPage()), // تم حذف const من هنا
               );
             }),
-            // ربط أيقونة الطلبات بصفحة تقرير الطلبات
             _buildSidebarItem(Icons.inventory_2, "الطلبات", () {
               Navigator.push(
                 context,
