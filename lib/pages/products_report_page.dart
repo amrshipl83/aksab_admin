@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:excel/excel.dart';
-import 'package:flutter/foundation.dart' show kIsWeb; // للتمييز بين الويب والموبايل
-
-// هذا الجزء يحل مشكلة الـ Build للويب
-import 'dart:io' if (dart.library.html) 'dart:ui_web'; 
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ProductsReportPage extends StatefulWidget {
   const ProductsReportPage({super.key});
@@ -34,30 +31,33 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
     });
   }
 
-  // وظيفة التصدير المحسنة للويب والموبايل
   Future<void> _exportToExcel(List<QueryDocumentSnapshot> docs) async {
     try {
       var excel = Excel.createExcel();
       Sheet sheetObject = excel['Products'];
-      sheetObject.appendRow(['اسم المنتج', 'القسم الرئيسي', 'الحالة']);
+
+      // التعديل هنا: استخدام TextCellValue بدلاً من String مباشرة
+      sheetObject.appendRow([
+        TextCellValue('اسم المنتج'),
+        TextCellValue('القسم الرئيسي'),
+        TextCellValue('الحالة'),
+      ]);
 
       for (var doc in docs) {
         var data = doc.data() as Map<String, dynamic>;
         sheetObject.appendRow([
-          data['name'] ?? '',
-          mainCategoriesNames[data['mainId']] ?? 'غير معروف',
-          data['status'] == 'active' ? 'نشط' : 'غير نشط',
+          TextCellValue(data['name'] ?? ''),
+          TextCellValue(mainCategoriesNames[data['mainId']] ?? 'غير معروف'),
+          TextCellValue(data['status'] == 'active' ? 'نشط' : 'غير نشط'),
         ]);
       }
 
-      // حفظ الملف بطريقة تناسب المتصفح والموبايل
       if (kIsWeb) {
-        // في الويب يتم التحميل مباشرة
+        // في الويب يتم التحميل مباشرة عبر المتصفح
         excel.save(fileName: "products_report.xlsx");
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("جاري تحميل ملف الإكسل...")));
-      } else {
-        // للموبايل فقط نستخدم هذه الطريقة (سيتم تجاهلها في الويب)
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("هذه الميزة تعمل في نسخة الويب حالياً")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("جاري تحميل ملف الإكسل...")),
+        );
       }
     } catch (e) {
       debugPrint("Excel Error: $e");
@@ -92,6 +92,7 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
   Widget _buildFilterSection() {
     return Container(
       padding: const EdgeInsets.all(12),
+      color: Colors.white,
       child: Column(
         children: [
           Row(
@@ -150,7 +151,7 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         var docs = snapshot.data!.docs;
         if (_searchController.text.isNotEmpty) {
-          docs = docs.where((d) => d['name'].toString().contains(_searchController.text)).toList();
+          docs = docs.where((d) => d['name'].toString().toLowerCase().contains(_searchController.text.toLowerCase())).toList();
         }
 
         return ListView.builder(
@@ -163,7 +164,9 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
             return Card(
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               child: ListTile(
-                leading: imageUrl != '' ? Image.network(imageUrl, width: 50, height: 50, fit: BoxFit.cover) : const Icon(Icons.image),
+                leading: imageUrl != '' 
+                    ? Image.network(imageUrl, width: 50, height: 50, fit: BoxFit.cover) 
+                    : const Icon(Icons.image),
                 title: Text(data['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Text(mainCategoriesNames[data['mainId']] ?? 'تحميل...'),
                 trailing: Row(
@@ -182,7 +185,6 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
   }
 
   void _editProduct(String id, Map<String, dynamic> data) {
-    // واجهة تعديل مبسطة
     final nameController = TextEditingController(text: data['name']);
     showDialog(
       context: context,
