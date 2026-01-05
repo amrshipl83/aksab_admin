@@ -18,7 +18,6 @@ class SalaryDetailScreen extends StatefulWidget {
 class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   
-  // وحدات التحكم للحقول النصية
   final TextEditingController _baseSalaryController = TextEditingController();
   final TextEditingController _commissionRateController = TextEditingController();
   final TextEditingController _commissionThresholdController = TextEditingController();
@@ -29,7 +28,7 @@ class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
   double _monthlyTarget = 0;
   double _netSalary = 0;
   double _commissionAmount = 0;
-  bool _isInitialized = false; // حارس لمنع حلقة التحديث اللانهائية
+  bool _isInitialized = false; 
 
   @override
   void dispose() {
@@ -41,7 +40,6 @@ class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
     super.dispose();
   }
 
-  // دالة الحساب: تدعم التحديث الصامت أثناء البناء أو التحديث التفاعلي عند الكتابة
   void _calculateSalary({bool shouldUpdateUI = true}) {
     double base = double.tryParse(_baseSalaryController.text) ?? 0;
     double rate = double.tryParse(_commissionRateController.text) ?? 0;
@@ -49,7 +47,6 @@ class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
     double deduct = double.tryParse(_deductionsValueController.text) ?? 0;
 
     double targetPercent = (_monthlyTarget > 0) ? (_monthlySales / _monthlyTarget) * 100 : 0;
-
     double calcCommission = (targetPercent >= threshold) ? (_monthlySales * rate) : 0;
     double calcNet = base + calcCommission + deduct;
 
@@ -66,7 +63,6 @@ class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // تحديد الكولكشن بناءً على النوع الممرر
     String collection = (widget.employeeType == 'rep') ? 'salesRep' : 'managers';
 
     return Scaffold(
@@ -86,22 +82,18 @@ class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
           }
 
           var data = snapshot.data!.data() as Map<String, dynamic>;
-          
-          // تحديث بيانات المبيعات والهدف من قاعدة البيانات
           _monthlySales = (data['monthlySales'] ?? 0).toDouble();
           String currentMonth = DateTime.now().toString().substring(0, 7);
           var targets = data['targetsHistory'] as List? ?? [];
           var currentTargetDoc = targets.firstWhere((t) => t['month'] == currentMonth, orElse: () => null);
           _monthlyTarget = (currentTargetDoc != null) ? currentTargetDoc['targetAmount'].toDouble() : 0.0;
 
-          // التهيئة الأولى فقط: لمنع مسح كتابة المستخدم أثناء البناء اللحظي
           if (!_isInitialized) {
             _baseSalaryController.text = (data['baseSalary'] ?? '').toString();
             _commissionRateController.text = (data['commissionRate'] ?? '').toString();
             _commissionThresholdController.text = (data['commissionThreshold'] ?? '0').toString();
             _deductionsValueController.text = (data['deductionsValue'] ?? '').toString();
             _deductionsNotesController.text = data['deductionsNotes'] ?? '';
-            
             _calculateSalary(shouldUpdateUI: false);
             _isInitialized = true;
           }
@@ -213,23 +205,42 @@ class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
       children: [
         const Text("آخر الزيارات المسجلة", style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
         const SizedBox(height: 10),
-        StreamBuilder<QuerySnapshot>(
-          stream: _db.collection('visits').where('repCode', isEqualTo: repCode).limit(5).snapshots(),
-          builder: (context, snap) {
-            if (!snap.hasData) return const LinearProgressIndicator();
-            if (snap.data!.docs.isEmpty) return const Text("لا توجد زيارات مسجلة لهذا الشهر");
-            return Column(
-              children: snap.data!.docs.map((doc) => Card(
-                child: ListTile(
-                  dense: true,
-                  title: Text(doc['customerName'] ?? 'عميل غير معروف'),
-                  subtitle: Text(doc['timestamp']?.toDate().toString().split('.')[0] ?? ''),
-                  leading: const Icon(Icons.location_on, color: Colors.red),
-                ),
-              )).toList(),
-            );
-          },
-        ),
+        if (repCode == null || repCode.isEmpty)
+          const Text("لا يوجد كود تعريفي للمندوب")
+        else
+          StreamBuilder<QuerySnapshot>(
+            stream: _db.collection('visits')
+                .where('repCode', isEqualTo: repCode)
+                .orderBy('timestamp', descending: true)
+                .limit(5)
+                .snapshots(),
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) return const LinearProgressIndicator();
+              if (!snap.hasData || snap.data!.docs.isEmpty) return const Text("لا توجد زيارات مسجلة لهذا الشهر");
+              
+              return ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: snap.data!.docs.length,
+                itemBuilder: (context, index) {
+                  var doc = snap.data!.docs[index];
+                  var visitData = doc.data() as Map<String, dynamic>;
+                  String dateStr = "N/A";
+                  if (visitData['timestamp'] != null) {
+                    dateStr = (visitData['timestamp'] as Timestamp).toDate().toString().split('.')[0];
+                  }
+                  return Card(
+                    child: ListTile(
+                      dense: true,
+                      title: Text(visitData['customerName'] ?? 'غير معروف'),
+                      subtitle: Text(dateStr),
+                      leading: const Icon(Icons.location_on, color: Colors.red),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
       ],
     );
   }
