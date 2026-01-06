@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-// استيراد التبويب الأول من المجلد الفرعي tabs
+// استيراد التبويبات من المجلد الفرعي tabs
 import 'tabs/pending_free_drivers_tab.dart'; 
+import 'tabs/pending_staff_tab.dart'; 
 
 class StaffManagementMain extends StatefulWidget {
   const StaffManagementMain({super.key});
@@ -34,11 +35,14 @@ class _StaffManagementMainState extends State<StaffManagementMain> with SingleTi
           style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)
         ),
         backgroundColor: const Color(0xFF1A2C3D),
+        foregroundColor: Colors.white, // لضمان ظهور الأيقونات باللون الأبيض
         bottom: TabBar(
           controller: _tabController,
-          isScrollable: true, // للسماح بالتنقل السلس بين 5 أقسام
+          isScrollable: true, // للسماح بالتنقل السلس بين الـ 5 أقسام
           indicatorColor: Colors.orange,
-          labelStyle: const TextStyle(fontFamily: 'Cairo', fontSize: 12),
+          labelColor: Colors.orange,
+          unselectedLabelColor: Colors.white70,
+          labelStyle: const TextStyle(fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.bold),
           tabs: const [
             Tab(icon: Icon(Icons.motorcycle), text: "انتظار (حر)"),
             Tab(icon: Icon(Icons.person_add_alt_1), text: "انتظار (موظفين)"),
@@ -51,11 +55,13 @@ class _StaffManagementMainState extends State<StaffManagementMain> with SingleTi
       body: TabBarView(
         controller: _tabController,
         children: [
-          // التبويب الأول المربوط بـ pendingFreeDrivers
+          // 1. التبويب الأول: طلبات المناديب الأحرار
           const PendingFreeDriversTab(),
 
-          // التبويبات القادمة (سيتم استبدالها بملفات منفصلة تباعاً)
-          _buildPlaceholder("قائمة انتظار الموظفين (pendingReps & pendingManagers)"),
+          // 2. التبويب الثاني: طلبات الموظفين (مناديب شركة + مديرين)
+          const PendingStaffTab(),
+
+          // 3. التبويبات القادمة (سيتم استبدالها بملفات منفصلة تباعاً)
           _buildPlaceholder("المناديب الأحرار المعتمدين (freeDrivers)"),
           _buildPlaceholder("مناديب الشركة المعتمدين (deliveryReps)"),
           _buildPlaceholder("المشرفين والمديرين (managers)"),
