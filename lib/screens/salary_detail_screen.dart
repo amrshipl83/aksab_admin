@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SalaryDetailScreen extends StatefulWidget {
   final String employeeId;
-  final String employeeType; // 'manager', 'supervisor', 'rep'
+  final String employeeType;
 
   const SalaryDetailScreen({
     super.key,
@@ -17,26 +17,35 @@ class SalaryDetailScreen extends StatefulWidget {
 
 class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  
+
+  // وحدات التحكم للحقول المالية
   final TextEditingController _baseSalaryController = TextEditingController();
   final TextEditingController _commissionRateController = TextEditingController();
   final TextEditingController _commissionThresholdController = TextEditingController();
-  final TextEditingController _deductionsValueController = TextEditingController();
-  final TextEditingController _deductionsNotesController = TextEditingController();
+  
+  // الحقول الاحترافية الجديدة
+  final TextEditingController _bonusesController = TextEditingController(); // مكافآت
+  final TextEditingController _taxesController = TextEditingController(); // ضرائب
+  final TextEditingController _insuranceController = TextEditingController(); // تأمينات
+  final TextEditingController _otherDeductionsController = TextEditingController(); // خصومات أخرى
+  final TextEditingController _notesController = TextEditingController();
 
   double _monthlySales = 0;
   double _monthlyTarget = 0;
   double _netSalary = 0;
   double _commissionAmount = 0;
-  bool _isInitialized = false; 
+  bool _isInitialized = false;
 
   @override
   void dispose() {
     _baseSalaryController.dispose();
     _commissionRateController.dispose();
     _commissionThresholdController.dispose();
-    _deductionsValueController.dispose();
-    _deductionsNotesController.dispose();
+    _bonusesController.dispose();
+    _taxesController.dispose();
+    _insuranceController.dispose();
+    _otherDeductionsController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
@@ -44,19 +53,23 @@ class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
     double base = double.tryParse(_baseSalaryController.text) ?? 0;
     double rate = double.tryParse(_commissionRateController.text) ?? 0;
     double threshold = double.tryParse(_commissionThresholdController.text) ?? 0;
-    double deduct = double.tryParse(_deductionsValueController.text) ?? 0;
+    
+    double bonuses = double.tryParse(_bonusesController.text) ?? 0;
+    double taxes = double.tryParse(_taxesController.text) ?? 0;
+    double insurance = double.tryParse(_insuranceController.text) ?? 0;
+    double others = double.tryParse(_otherDeductionsController.text) ?? 0;
 
     double targetPercent = (_monthlyTarget > 0) ? (_monthlySales / _monthlyTarget) * 100 : 0;
-    double calcCommission = (targetPercent >= threshold) ? (_monthlySales * rate) : 0;
-    double calcNet = base + calcCommission + deduct;
+    _commissionAmount = (targetPercent >= threshold) ? (_monthlySales * rate) : 0;
+
+    // صافي الراتب = (أساسي + عمولة + مكافآت) - (ضرائب + تأمينات + خصومات)
+    double calcNet = (base + _commissionAmount + bonuses) - (taxes + insurance + others);
 
     if (shouldUpdateUI) {
       setState(() {
-        _commissionAmount = calcCommission;
         _netSalary = calcNet;
       });
     } else {
-      _commissionAmount = calcCommission;
       _netSalary = calcNet;
     }
   }
@@ -67,7 +80,7 @@ class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('تقرير أداء الموظف', style: TextStyle(fontFamily: 'Cairo')),
+        title: const Text('اعتماد مسيرات الرواتب', style: TextStyle(fontFamily: 'Cairo')),
         backgroundColor: const Color(0xFF1A2C3D),
       ),
       body: StreamBuilder<DocumentSnapshot>(
@@ -76,10 +89,7 @@ class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
           if (snapshot.connectionState == ConnectionState.waiting && !_isInitialized) {
             return const Center(child: CircularProgressIndicator());
           }
-          
-          if (!snapshot.hasData || !snapshot.data!.exists) {
-            return const Center(child: Text("عذراً، لم يتم العثور على بيانات الموظف"));
-          }
+          if (!snapshot.hasData || !snapshot.data!.exists) return const Center(child: Text("الموظف غير موجود"));
 
           var data = snapshot.data!.data() as Map<String, dynamic>;
           _monthlySales = (data['monthlySales'] ?? 0).toDouble();
@@ -92,8 +102,8 @@ class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
             _baseSalaryController.text = (data['baseSalary'] ?? '').toString();
             _commissionRateController.text = (data['commissionRate'] ?? '').toString();
             _commissionThresholdController.text = (data['commissionThreshold'] ?? '0').toString();
-            _deductionsValueController.text = (data['deductionsValue'] ?? '').toString();
-            _deductionsNotesController.text = data['deductionsNotes'] ?? '';
+            // الحقول الاحترافية تبدأ فارغة أو من الداتا إذا وجدت
+            _bonusesController.text = (data['lastBonus'] ?? '').toString();
             _calculateSalary(shouldUpdateUI: false);
             _isInitialized = true;
           }
@@ -101,18 +111,17 @@ class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildProfileHeader(data),
-                const Divider(height: 30),
-                _buildPerformanceMetrics(),
-                const Divider(height: 30),
-                _buildDynamicContent(data),
-                const Divider(height: 30),
-                _buildSalarySheet(),
-                const SizedBox(height: 30),
-                _buildSaveButton(),
                 const SizedBox(height: 20),
+                _buildPerformanceMetrics(),
+                const Divider(height: 40),
+                _buildSalaryForm(),
+                const SizedBox(height: 20),
+                _buildNetSalaryCard(),
+                const SizedBox(height: 30),
+                _buildApproveButton(data['fullname'] ?? 'الموظف'),
+                const SizedBox(height: 40),
               ],
             ),
           );
@@ -121,210 +130,153 @@ class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
     );
   }
 
-  Widget _buildProfileHeader(Map<String, dynamic> data) {
-    return Row(
-      children: [
-        const CircleAvatar(
-          radius: 35,
-          backgroundColor: Colors.orange,
-          child: Icon(Icons.person, size: 40, color: Colors.white),
+  Widget _buildSalaryForm() {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), border: BorderSide(color: Colors.grey[300]!)),
+      child: Padding(
+        padding: const EdgeInsets.all(15),
+        child: Column(
+          children: [
+            const Text("تفاصيل المستحقات والاستقطاعات", style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+            const SizedBox(height: 10),
+            _moneyField("الراتب الأساسي", _baseSalaryController, Icons.money),
+            _moneyField("مكافآت إضافية (+)", _bonusesController, Icons.add_circle, color: Colors.green),
+            const Divider(),
+            _moneyField("ضرائب ورسوم (-)", _taxesController, Icons.remove_circle, color: Colors.red),
+            _moneyField("تأمينات اجتماعية (-)", _insuranceController, Icons.security, color: Colors.red),
+            _moneyField("خصومات أخرى (-)", _otherDeductionsController, Icons.money_off, color: Colors.red),
+            const SizedBox(height: 10),
+            TextField(
+              controller: _notesController,
+              decoration: const InputDecoration(labelText: "ملاحظات الاعتماد الشهرية", border: OutlineInputBorder()),
+              maxLines: 2,
+            ),
+          ],
         ),
-        const SizedBox(width: 15),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(data['fullname'] ?? 'N/A', 
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-              Text("الدور: ${_getArabicRole(widget.employeeType)}", 
-                style: const TextStyle(color: Colors.grey, fontFamily: 'Cairo')),
-              Text(data['email'] ?? '', style: const TextStyle(fontSize: 12)),
-            ],
-          ),
-        ),
-      ],
+      ),
     );
+  }
+
+  Widget _moneyField(String label, TextEditingController controller, IconData icon, {Color? color}) {
+    return TextField(
+      controller: controller,
+      keyboardType: TextInputType.number,
+      onChanged: (_) => _calculateSalary(),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: color),
+        labelStyle: TextStyle(color: color, fontSize: 13, fontFamily: 'Cairo'),
+      ),
+    );
+  }
+
+  Widget _buildNetSalaryCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: const Color(0xFF1A2C3D), borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        children: [
+          const Text("صافي المستحق النهائي", style: TextStyle(color: Colors.white70, fontFamily: 'Cairo')),
+          Text("${_netSalary.toStringAsFixed(2)} ج.م", 
+            style: const TextStyle(color: Colors.orange, fontSize: 28, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildApproveButton(String name) {
+    return SizedBox(
+      width: double.infinity,
+      height: 60,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+        onPressed: () => _confirmApproval(name),
+        child: const Text("اعتماد الراتب وترحيله للأرشيف", style: TextStyle(color: Colors.white, fontSize: 18, fontFamily: 'Cairo')),
+      ),
+    );
+  }
+
+  void _confirmApproval(String name) async {
+    String currentMonth = DateTime.now().toString().substring(0, 7);
+    bool confirm = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("تأكيد الاعتماد المالي", textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Cairo')),
+        content: Text("هل أنت متأكد من اعتماد مبلغ ($_netSalary) للموظف ($name) عن شهر ($currentMonth)؟\n\nسيتم ترحيل البيانات ولن يمكن تعديلها من هذه الشاشة مرة أخرى.", textAlign: TextAlign.right),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("مراجعة")),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: const Text("تأكيد الترحيل")),
+        ],
+      ),
+    ) ?? false;
+
+    if (confirm) {
+      _processSettlement(currentMonth, name);
+    }
+  }
+
+  Future<void> _processSettlement(String month, String name) async {
+    try {
+      // 1. إضافة السجل في الأرشيف
+      await _db.collection('salariesHistory').add({
+        'employeeId': widget.employeeId,
+        'employeeName': name,
+        'employeeType': widget.employeeType,
+        'month': month,
+        'baseSalary': double.tryParse(_baseSalaryController.text) ?? 0,
+        'commission': _commissionAmount,
+        'bonuses': double.tryParse(_bonusesController.text) ?? 0,
+        'deductions': (double.tryParse(_taxesController.text) ?? 0) + (double.tryParse(_insuranceController.text) ?? 0) + (double.tryParse(_otherDeductionsController.text) ?? 0),
+        'netSalary': _netSalary,
+        'approvedAt': FieldValue.serverTimestamp(),
+        'notes': _notesController.text,
+      });
+
+      // 2. تحديث حالة الموظف (تم الاعتماد) وتصفير مبيعاته لبداية شهر جديد
+      String collection = (widget.employeeType == 'rep') ? 'salesRep' : 'managers';
+      await _db.collection(collection).doc(widget.employeeId).update({
+        'lastSettledMonth': month,
+        'isSettled': true, // العلامة التي سنستخدمها في القائمة الخارجية
+        'monthlySales': 0, 
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم الاعتماد بنجاح وتم ترحيل البيانات"), backgroundColor: Colors.green));
+        Navigator.pop(context); // العودة للقائمة
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("حدث خطأ أثناء الترحيل: $e")));
+    }
+  }
+
+  // الدوال المساعدة للواجهة (Header, Metrics, etc.) كما في النسخ السابقة...
+  Widget _buildProfileHeader(Map<String, dynamic> data) {
+    return Row(children: [
+      const CircleAvatar(radius: 30, backgroundColor: Colors.orange, child: Icon(Icons.person, color: Colors.white)),
+      const SizedBox(width: 15),
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(data['fullname'] ?? '', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+        Text("الكود: ${data['repCode'] ?? '---'}", style: const TextStyle(fontSize: 12)),
+      ])
+    ]);
   }
 
   Widget _buildPerformanceMetrics() {
     double percent = (_monthlyTarget > 0) ? (_monthlySales / _monthlyTarget * 100) : 0;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text("مؤشرات الأداء", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, fontFamily: 'Cairo')),
-        const SizedBox(height: 10),
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 2,
-          childAspectRatio: 1.6,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
-          children: [
-            _metricCard("الهدف الشهري", _monthlyTarget.toStringAsFixed(2), Colors.blue),
-            _metricCard("المبيعات الفعلية", _monthlySales.toStringAsFixed(2), Colors.orange),
-            _metricCard("تحقيق الهدف", "${percent.toStringAsFixed(1)}%", Colors.green),
-            _metricCard("التقييم", percent >= 100 ? "ممتاز" : "جيد", Colors.purple),
-          ],
-        ),
-      ],
-    );
+    return Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+      _smallMetric("المبيعات", _monthlySales.toStringAsFixed(0), Colors.blue),
+      _smallMetric("الهدف", _monthlyTarget.toStringAsFixed(0), Colors.grey),
+      _smallMetric("التحقيق", "${percent.toStringAsFixed(1)}%", Colors.green),
+    ]);
   }
 
-  Widget _metricCard(String title, String val, Color color) {
-    return Card(
-      elevation: 0,
-      color: color.withOpacity(0.1),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: color.withOpacity(0.3))),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(title, style: const TextStyle(fontSize: 12, fontFamily: 'Cairo')),
-          Text(val, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDynamicContent(Map<String, dynamic> data) {
-    if (widget.employeeType == 'rep') {
-      return _buildVisitsList(data['repCode']);
-    } else {
-      int count = (data['reps'] as List? ?? data['supervisors'] as List? ?? []).length;
-      return ListTile(
-        tileColor: Colors.grey[100],
-        title: const Text("عدد التابعين المسجلين", style: TextStyle(fontFamily: 'Cairo')),
-        trailing: CircleAvatar(child: Text(count.toString())),
-      );
-    }
-  }
-
-  Widget _buildVisitsList(String? repCode) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text("آخر الزيارات المسجلة", style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-        const SizedBox(height: 10),
-        if (repCode == null || repCode.isEmpty)
-          const Text("لا يوجد كود تعريفي للمندوب")
-        else
-          StreamBuilder<QuerySnapshot>(
-            stream: _db.collection('visits')
-                .where('repCode', isEqualTo: repCode)
-                .orderBy('timestamp', descending: true)
-                .limit(5)
-                .snapshots(),
-            builder: (context, snap) {
-              if (snap.connectionState == ConnectionState.waiting) return const LinearProgressIndicator();
-              if (!snap.hasData || snap.data!.docs.isEmpty) return const Text("لا توجد زيارات مسجلة لهذا الشهر");
-              
-              return ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: snap.data!.docs.length,
-                itemBuilder: (context, index) {
-                  var doc = snap.data!.docs[index];
-                  var visitData = doc.data() as Map<String, dynamic>;
-                  String dateStr = "N/A";
-                  if (visitData['timestamp'] != null) {
-                    dateStr = (visitData['timestamp'] as Timestamp).toDate().toString().split('.')[0];
-                  }
-                  return Card(
-                    child: ListTile(
-                      dense: true,
-                      title: Text(visitData['customerName'] ?? 'غير معروف'),
-                      subtitle: Text(dateStr),
-                      leading: const Icon(Icons.location_on, color: Colors.red),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-      ],
-    );
-  }
-
-  Widget _buildSalarySheet() {
-    return Container(
-      padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.grey[300]!)),
-      child: Column(
-        children: [
-          const Text("شيت المرتبات", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-          _salaryField("الراتب الأساسي", _baseSalaryController),
-          _salaryField("نسبة العمولة (مثلاً 0.05)", _commissionRateController),
-          _salaryField("نسبة تحقيق العمولة %", _commissionThresholdController),
-          _salaryField("الخصومات / الإضافات الرقمية", _deductionsValueController),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _deductionsNotesController,
-            maxLines: 2,
-            decoration: const InputDecoration(labelText: "ملاحظات الخصومات والمكافآت", border: OutlineInputBorder()),
-          ),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(color: const Color(0xFF1A2C3D), borderRadius: BorderRadius.circular(8)),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text("صافي الراتب النهائي:", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-                Text(_netSalary.toStringAsFixed(2), style: const TextStyle(color: Colors.orange, fontSize: 20, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          )
-        ],
-      ),
-    );
-  }
-
-  Widget _salaryField(String label, TextEditingController controller) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: TextField(
-        controller: controller,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        decoration: InputDecoration(labelText: label, border: const UnderlineInputBorder()),
-        onChanged: (_) => _calculateSalary(),
-      ),
-    );
-  }
-
-  Widget _buildSaveButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 55,
-      child: ElevatedButton.icon(
-        icon: const Icon(Icons.save, color: Colors.white),
-        label: const Text("حفظ البيانات في النظام", style: TextStyle(color: Colors.white, fontSize: 18, fontFamily: 'Cairo')),
-        style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-        onPressed: _saveData,
-      ),
-    );
-  }
-
-  Future<void> _saveData() async {
-    String collection = (widget.employeeType == 'rep') ? 'salesRep' : 'managers';
-    try {
-      await _db.collection(collection).doc(widget.employeeId).update({
-        'baseSalary': double.tryParse(_baseSalaryController.text) ?? 0,
-        'commissionRate': double.tryParse(_commissionRateController.text) ?? 0,
-        'commissionThreshold': double.tryParse(_commissionThresholdController.text) ?? 0,
-        'deductionsValue': double.tryParse(_deductionsValueController.text) ?? 0,
-        'deductionsNotes': _deductionsNotesController.text,
-        'netSalary': _netSalary,
-      });
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم التحديث بنجاح")));
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ في الحفظ: $e")));
-    }
-  }
-
-  String _getArabicRole(String type) {
-    if (type == 'manager') return 'مدير مبيعات';
-    if (type == 'supervisor') return 'مشرف مبيعات';
-    return 'مندوب مبيعات';
+  Widget _smallMetric(String label, String val, Color color) {
+    return Column(children: [
+      Text(label, style: const TextStyle(fontSize: 10, fontFamily: 'Cairo')),
+      Text(val, style: TextStyle(fontWeight: FontWeight.bold, color: color)),
+    ]);
   }
 }
 
