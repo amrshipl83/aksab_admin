@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:aksab_admin/screens/sales_management_screen.dart'; 
-import 'package:aksab_admin/screens/staff_management_delivery.dart'; 
+import 'package:aksab_admin/screens/sales_management_screen.dart';
+import 'package:aksab_admin/screens/staff_management_delivery.dart';
+// الربط الجديد هنا
+import 'package:aksab_admin/screens/hr/admin_employees/admin_employees_main.dart';
 
 class HRManagementScreen extends StatelessWidget {
   const HRManagementScreen({super.key});
@@ -47,10 +49,16 @@ class HRManagementScreen extends StatelessWidget {
                   _buildHRCard(
                     context,
                     title: "الإداريين",
-                    subtitle: "إدارة المديرين والمشرفين",
+                    subtitle: "إدارة شؤون الموظفين المكتبيين",
                     icon: Icons.admin_panel_settings,
                     color: Colors.blue,
-                    onTap: () {},
+                    onTap: () {
+                      // تفعيل التنقل لشاشة الإداريين
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const AdminEmployeesMain()),
+                      );
+                    },
                   ),
                   _buildHRCard(
                     context,
@@ -72,7 +80,6 @@ class HRManagementScreen extends StatelessWidget {
                     icon: Icons.local_shipping,
                     color: Colors.green,
                     onTap: () {
-                      // تم تغيير الاسم هنا إلى StaffManagementMain ليطابق الملف الفعلي
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (context) => const StaffManagementMain()),
