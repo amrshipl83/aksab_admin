@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+// إضافة الاستيراد لصفحة الكاش باك
+import 'cashback_management_screen.dart'; 
 
 class MarketingManagementScreen extends StatelessWidget {
   const MarketingManagementScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // قياس عرض الشاشة لتحديد التصميم المتوافق
     double screenWidth = MediaQuery.of(context).size.width;
     bool isMobile = screenWidth < 800;
 
@@ -38,7 +39,6 @@ class MarketingManagementScreen extends StatelessWidget {
             const SizedBox(height: 20),
             Expanded(
               child: GridView.count(
-                // يتغير عدد الأعمدة: 1 للموبايل، 3 للشاشات الكبيرة
                 crossAxisCount: isMobile ? 1 : 3,
                 crossAxisSpacing: 20,
                 mainAxisSpacing: 20,
@@ -51,7 +51,11 @@ class MarketingManagementScreen extends StatelessWidget {
                     icon: Icons.percent,
                     color: Colors.redAccent,
                     onTap: () {
-                      // Navigator.push... لصفحة الكاش باك
+                      // تم تفعيل الربط هنا
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const CashbackManagementScreen()),
+                      );
                     },
                   ),
                   _buildMarketingCard(
@@ -108,7 +112,7 @@ class MarketingManagementScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(15),
-          border: Border(right: BorderSide(color: color, width: 6)), // تمييز جانبي باللون
+          border: Border(right: BorderSide(color: color, width: 6)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.05),
