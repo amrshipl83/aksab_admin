@@ -215,7 +215,8 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () => _editRule(doc)),
-                    IconButton(icon: const Icon(Icons.trash_canvas, color: Colors.red), onPressed: () => _deleteRule(doc.id)),
+                    IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () => _deleteRule(doc.id)),
+
                   ],
                 ),
               ),
