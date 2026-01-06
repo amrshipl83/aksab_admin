@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'sales_management_screen.dart'; // استيراد صفحة المبيعات
-import 'staff_management_delivery.dart'; // استيراد الصفحة الجديدة التي أنشأناها للهيكل الموحد
+import 'staff_management_delivery.dart'; // استيراد صفحة التحصيل والدليفري
 
 class HRManagementScreen extends StatelessWidget {
   const HRManagementScreen({super.key});
@@ -60,7 +60,7 @@ class HRManagementScreen extends StatelessWidget {
                     icon: Icons.admin_panel_settings,
                     color: Colors.blue,
                     onTap: () {
-                      // سيتم ربطها بتبويب المشرفين في صفحة التحصيل أو صفحة منفصلة حسب رغبتك
+                      // سيتم ربطها لاحقاً
                     },
                   ),
                   _buildHRCard(
@@ -83,7 +83,7 @@ class HRManagementScreen extends StatelessWidget {
                     icon: Icons.local_shipping,
                     color: Colors.green,
                     onTap: () {
-                      // الربط الفعلي مع صفحة الهيكل الموحد التي أنشأناها
+                      // تم إزالة const هنا لإصلاح خطأ البناء
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (context) => const StaffManagementDelivery()),

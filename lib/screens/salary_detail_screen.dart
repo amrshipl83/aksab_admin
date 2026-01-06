@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class SalaryDetailScreen extends StatefulWidget {
   final String employeeId;
   final String employeeType;
-
   const SalaryDetailScreen({
     super.key,
     required this.employeeId,
@@ -22,7 +21,7 @@ class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
   final TextEditingController _baseSalaryController = TextEditingController();
   final TextEditingController _commissionRateController = TextEditingController();
   final TextEditingController _commissionThresholdController = TextEditingController();
-  
+
   // الحقول الاحترافية الجديدة
   final TextEditingController _bonusesController = TextEditingController(); // مكافآت
   final TextEditingController _taxesController = TextEditingController(); // ضرائب
@@ -53,7 +52,6 @@ class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
     double base = double.tryParse(_baseSalaryController.text) ?? 0;
     double rate = double.tryParse(_commissionRateController.text) ?? 0;
     double threshold = double.tryParse(_commissionThresholdController.text) ?? 0;
-    
     double bonuses = double.tryParse(_bonusesController.text) ?? 0;
     double taxes = double.tryParse(_taxesController.text) ?? 0;
     double insurance = double.tryParse(_insuranceController.text) ?? 0;
@@ -96,13 +94,13 @@ class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
           String currentMonth = DateTime.now().toString().substring(0, 7);
           var targets = data['targetsHistory'] as List? ?? [];
           var currentTargetDoc = targets.firstWhere((t) => t['month'] == currentMonth, orElse: () => null);
+
           _monthlyTarget = (currentTargetDoc != null) ? currentTargetDoc['targetAmount'].toDouble() : 0.0;
 
           if (!_isInitialized) {
             _baseSalaryController.text = (data['baseSalary'] ?? '').toString();
             _commissionRateController.text = (data['commissionRate'] ?? '').toString();
             _commissionThresholdController.text = (data['commissionThreshold'] ?? '0').toString();
-            // الحقول الاحترافية تبدأ فارغة أو من الداتا إذا وجدت
             _bonusesController.text = (data['lastBonus'] ?? '').toString();
             _calculateSalary(shouldUpdateUI: false);
             _isInitialized = true;
@@ -133,7 +131,11 @@ class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
   Widget _buildSalaryForm() {
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), border: BorderSide(color: Colors.grey[300]!)),
+      // تم تصحيح الخطأ هنا بتغيير border إلى side
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: Colors.grey[300]!),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(15),
         child: Column(
@@ -179,8 +181,8 @@ class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
       child: Column(
         children: [
           const Text("صافي المستحق النهائي", style: TextStyle(color: Colors.white70, fontFamily: 'Cairo')),
-          Text("${_netSalary.toStringAsFixed(2)} ج.م", 
-            style: const TextStyle(color: Colors.orange, fontSize: 28, fontWeight: FontWeight.bold)),
+          Text("${_netSalary.toStringAsFixed(2)} ج.م",
+              style: const TextStyle(color: Colors.orange, fontSize: 28, fontWeight: FontWeight.bold)),
         ],
       ),
     );
@@ -191,9 +193,12 @@ class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
       width: double.infinity,
       height: 60,
       child: ElevatedButton(
-        style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+        style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
         onPressed: () => _confirmApproval(name),
-        child: const Text("اعتماد الراتب وترحيله للأرشيف", style: TextStyle(color: Colors.white, fontSize: 18, fontFamily: 'Cairo')),
+        child: const Text("اعتماد الراتب وترحيله للأرشيف",
+            style: TextStyle(color: Colors.white, fontSize: 18, fontFamily: 'Cairo')),
       ),
     );
   }
@@ -201,16 +206,22 @@ class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
   void _confirmApproval(String name) async {
     String currentMonth = DateTime.now().toString().substring(0, 7);
     bool confirm = await showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("تأكيد الاعتماد المالي", textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Cairo')),
-        content: Text("هل أنت متأكد من اعتماد مبلغ ($_netSalary) للموظف ($name) عن شهر ($currentMonth)؟\n\nسيتم ترحيل البيانات ولن يمكن تعديلها من هذه الشاشة مرة أخرى.", textAlign: TextAlign.right),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("مراجعة")),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.green), child: const Text("تأكيد الترحيل")),
-        ],
-      ),
-    ) ?? false;
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("تأكيد الاعتماد المالي", textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Cairo')),
+            content: Text(
+                "هل أنت متأكد من اعتماد مبلغ ($_netSalary) للموظف ($name) عن شهر ($currentMonth)؟\n\nسيتم ترحيل البيانات ولن يمكن تعديلها من هذه الشاشة مرة أخرى.",
+                textAlign: TextAlign.right),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("مراجعة")),
+              ElevatedButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                  child: const Text("تأكيد الترحيل")),
+            ],
+          ),
+        ) ??
+        false;
 
     if (confirm) {
       _processSettlement(currentMonth, name);
@@ -228,30 +239,31 @@ class _SalaryDetailScreenState extends State<SalaryDetailScreen> {
         'baseSalary': double.tryParse(_baseSalaryController.text) ?? 0,
         'commission': _commissionAmount,
         'bonuses': double.tryParse(_bonusesController.text) ?? 0,
-        'deductions': (double.tryParse(_taxesController.text) ?? 0) + (double.tryParse(_insuranceController.text) ?? 0) + (double.tryParse(_otherDeductionsController.text) ?? 0),
+        'deductions': (double.tryParse(_taxesController.text) ?? 0) +
+            (double.tryParse(_insuranceController.text) ?? 0) +
+            (double.tryParse(_otherDeductionsController.text) ?? 0),
         'netSalary': _netSalary,
         'approvedAt': FieldValue.serverTimestamp(),
         'notes': _notesController.text,
       });
 
-      // 2. تحديث حالة الموظف (تم الاعتماد) وتصفير مبيعاته لبداية شهر جديد
+      // 2. تحديث حالة الموظف
       String collection = (widget.employeeType == 'rep') ? 'salesRep' : 'managers';
       await _db.collection(collection).doc(widget.employeeId).update({
         'lastSettledMonth': month,
-        'isSettled': true, // العلامة التي سنستخدمها في القائمة الخارجية
-        'monthlySales': 0, 
+        'isSettled': true,
+        'monthlySales': 0,
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم الاعتماد بنجاح وتم ترحيل البيانات"), backgroundColor: Colors.green));
-        Navigator.pop(context); // العودة للقائمة
+        Navigator.pop(context);
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("حدث خطأ أثناء الترحيل: $e")));
     }
   }
 
-  // الدوال المساعدة للواجهة (Header, Metrics, etc.) كما في النسخ السابقة...
   Widget _buildProfileHeader(Map<String, dynamic> data) {
     return Row(children: [
       const CircleAvatar(radius: 30, backgroundColor: Colors.orange, child: Icon(Icons.person, color: Colors.white)),
