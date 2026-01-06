@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'sales_management_screen.dart'; 
-import 'staff_management_delivery.dart'; 
+import 'package:aksab_admin/screens/sales_management_screen.dart'; 
+import 'package:aksab_admin/screens/staff_management_delivery.dart'; 
 
 class HRManagementScreen extends StatelessWidget {
   const HRManagementScreen({super.key});
@@ -27,19 +27,14 @@ class HRManagementScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               "مرحباً بك في لوحة تحكم الإدارة",
               style: TextStyle(
-                fontSize: isMobile ? 18 : 24,
+                fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: const Color(0xFF333D47),
+                color: Color(0xFF333D47),
                 fontFamily: 'Cairo',
               ),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              "اختر القسم الذي تود إدارته من الأسفل:",
-              style: TextStyle(fontFamily: 'Cairo', color: Colors.grey),
             ),
             const SizedBox(height: 30),
             Expanded(
@@ -77,10 +72,10 @@ class HRManagementScreen extends StatelessWidget {
                     icon: Icons.local_shipping,
                     color: Colors.green,
                     onTap: () {
-                      // تم حذف const من هنا تماماً
+                      // تم تغيير الاسم هنا إلى StaffManagementMain ليطابق الملف الفعلي
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => StaffManagementDelivery()),
+                        MaterialPageRoute(builder: (context) => const StaffManagementMain()),
                       );
                     },
                   ),
@@ -106,6 +101,7 @@ class HRManagementScreen extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(15),
+          border: Border(top: BorderSide(color: color, width: 5)),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.05),
@@ -113,37 +109,16 @@ class HRManagementScreen extends StatelessWidget {
               offset: const Offset(0, 5),
             ),
           ],
-          border: Border(top: BorderSide(color: color, width: 5)),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 50, color: color),
-              const SizedBox(height: 15),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Cairo',
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.grey.shade600,
-                  fontSize: 13,
-                  fontFamily: 'Cairo',
-                ),
-              ),
-              const SizedBox(height: 15),
-              Icon(Icons.arrow_circle_left_outlined, color: color.withOpacity(0.5)),
-            ],
-          ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 50, color: color),
+            const SizedBox(height: 15),
+            Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+            const SizedBox(height: 8),
+            Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontFamily: 'Cairo', color: Colors.grey)),
+          ],
         ),
       ),
     );
