@@ -10,7 +10,7 @@ class AdminListTab extends StatelessWidget {
       stream: FirebaseFirestore.instance.collection('administrativeEmployees').snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        
+
         return ListView.builder(
           padding: const EdgeInsets.all(10),
           itemCount: snapshot.data!.docs.length,
@@ -32,17 +32,17 @@ class AdminListTab extends StatelessWidget {
         title: Text(data['fullname'] ?? '', style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
         subtitle: Text("${data['jobTitle'] ?? ''} - ${data['department'] ?? ''}", style: const TextStyle(fontFamily: 'Cairo', fontSize: 12)),
         trailing: const Icon(Icons.edit_note, color: Colors.orange),
-        onPressed: () => _showRawDataEditor(context, id, data),
+        // تم تغيير onPressed إلى onTap هنا
+        onTap: () => _showRawDataEditor(context, id, data),
       ),
     );
   }
 
   void _showRawDataEditor(BuildContext context, String id, Map<String, dynamic> data) {
-    // المتحكمات للبيانات الخام فقط
-    final baseSalaryCont = TextEditingController(text: data['baseSalary']?.toString());
-    final allowancesCont = TextEditingController(text: data['allowances']?.toString());
-    final insuranceCont = TextEditingController(text: data['insurance']?.toString());
-    final taxesCont = TextEditingController(text: data['taxes']?.toString());
+    final baseSalaryCont = TextEditingController(text: data['baseSalary']?.toString() ?? "0");
+    final allowancesCont = TextEditingController(text: data['allowances']?.toString() ?? "0");
+    final insuranceCont = TextEditingController(text: data['insurance']?.toString() ?? "0");
+    final taxesCont = TextEditingController(text: data['taxes']?.toString() ?? "0");
 
     showModalBottomSheet(
       context: context,

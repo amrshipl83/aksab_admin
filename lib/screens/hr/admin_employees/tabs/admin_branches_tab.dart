@@ -20,7 +20,8 @@ class AdminBranchesTab extends StatelessWidget {
             List branches = data['allowedBranches'] ?? [];
 
             return Card(
-              margin: const EdgeInsets.bottom(10),
+              // تم التصحيح هنا من EdgeInsets.bottom إلى EdgeInsets.only(bottom: 10)
+              margin: const EdgeInsets.only(bottom: 10), 
               child: ListTile(
                 leading: const Icon(Icons.location_on, color: Colors.red),
                 title: Text(data['fullname'] ?? '', style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
@@ -52,7 +53,7 @@ class AdminBranchesTab extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 ...currentBranches.map((b) => ListTile(
-                      title: Text(b['name']),
+                      title: Text(b['name'] ?? ''),
                       subtitle: Text("${b['lat']}, ${b['lng']}"),
                       trailing: IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),
@@ -63,7 +64,7 @@ class AdminBranchesTab extends StatelessWidget {
                       ),
                     )),
                 const Divider(),
-                const Text("إضافة فرع جديد", style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text("إضافة فرع جديد", style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
                 TextField(controller: nameCont, decoration: const InputDecoration(labelText: "اسم الفرع")),
                 TextField(controller: latCont, decoration: const InputDecoration(labelText: "Latitude"), keyboardType: TextInputType.number),
                 TextField(controller: lngCont, decoration: const InputDecoration(labelText: "Longitude"), keyboardType: TextInputType.number),
