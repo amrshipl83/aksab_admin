@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart'; // ستحتاج لإضافة intl: ^0.19.0 في pubspec.yaml
 
 class CashbackManagementScreen extends StatefulWidget {
   const CashbackManagementScreen({super.key});
@@ -10,6 +11,7 @@ class CashbackManagementScreen extends StatefulWidget {
 
 class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
   final _formKey = GlobalKey<FormState>();
+  String? _editingRuleId; // لتحديد ما إذا كنا نعدل قاعدة موجودة
 
   // الـ Controllers
   final TextEditingController _descriptionController = TextEditingController();
@@ -17,25 +19,24 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
   final TextEditingController _priorityController = TextEditingController(text: "1");
   final TextEditingController _minPurchaseController = TextEditingController();
 
-  // متغيرات الحالة (State)
+  // متغيرات الحالة
   String _ruleType = 'percentage';
   String _appliesTo = 'all';
   String _targetType = 'none';
   bool _isActive = true;
 
-  // متغيرات الاختيار من القوائم
-  String? _selectedSellerId;
-  String? _selectedMainCatId;
-  String? _selectedSubCatId;
+  // التواريخ
+  DateTime? _startDate;
+  DateTime? _endDate;
 
-  // تخزين الأسماء المختارة لإرسالها مع الـ ID لتسهيل الفلترة
-  String? _selectedSellerName;
-  String? _selectedMainCatName;
-  String? _selectedSubCatName;
+  // الاختيارات
+  String? _selectedSellerId, _selectedMainCatId, _selectedSubCatId;
+  String? _selectedSellerName, _selectedMainCatName, _selectedSubCatName;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7F9),
       appBar: AppBar(
         title: const Text("إدارة قواعد الكاش باك", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF1A2C3D),
@@ -43,139 +44,205 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildSectionTitle("إضافة قاعدة جديدة", Icons.add_circle_outline),
-              const SizedBox(height: 15),
-              
-              // وصف القاعدة
-              TextFormField(
-                controller: _descriptionController,
-                decoration: const InputDecoration(labelText: "وصف القاعدة (مثال: خصم الصيف)", border: OutlineInputBorder()),
-                validator: (v) => v!.isEmpty ? "يرجى إدخال الوصف" : null,
-              ),
-              const SizedBox(height: 15),
-
-              // نوع القيمة وقيمتها
-              Row(
-                children: [
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      value: _ruleType,
-                      decoration: const InputDecoration(labelText: "النوع", border: OutlineInputBorder()),
-                      items: const [
-                        DropdownMenuItem(value: 'percentage', child: Text("نسبة مئوية")),
-                        DropdownMenuItem(value: 'fixedAmount', child: Text("مبلغ ثابت")),
+        child: Column(
+          children: [
+            // قسم النموذج (Form Section)
+            Card(
+              elevation: 4,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildSectionTitle(_editingRuleId == null ? "إضافة قاعدة جديدة" : "تعديل القاعدة", Icons.edit_calendar),
+                      const SizedBox(height: 15),
+                      TextFormField(
+                        controller: _descriptionController,
+                        decoration: const InputDecoration(labelText: "وصف القاعدة", border: OutlineInputBorder()),
+                        validator: (v) => v!.isEmpty ? "مطلوب" : null,
+                      ),
+                      const SizedBox(height: 15),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              value: _ruleType,
+                              decoration: const InputDecoration(labelText: "النوع", border: OutlineInputBorder()),
+                              items: const [
+                                DropdownMenuItem(value: 'percentage', child: Text("نسبة مئوية")),
+                                DropdownMenuItem(value: 'fixedAmount', child: Text("مبلغ ثابت")),
+                              ],
+                              onChanged: (v) => setState(() => _ruleType = v!),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: TextFormField(
+                              controller: _valueController,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(labelText: "القيمة", border: OutlineInputBorder()),
+                              validator: (v) => v!.isEmpty ? "مطلوب" : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 15),
+                      DropdownButtonFormField<String>(
+                        value: _appliesTo,
+                        decoration: const InputDecoration(labelText: "تطبق على", border: OutlineInputBorder()),
+                        items: const [
+                          DropdownMenuItem(value: 'all', child: Text("الجميع")),
+                          DropdownMenuItem(value: 'seller', child: Text("تاجر محدد")),
+                          DropdownMenuItem(value: 'category', child: Text("قسم رئيسي")),
+                          DropdownMenuItem(value: 'subcategory', child: Text("قسم فرعي")),
+                        ],
+                        onChanged: (v) => setState(() { _appliesTo = v!; }),
+                      ),
+                      const SizedBox(height: 15),
+                      if (_appliesTo == 'seller') _buildSellerDropdown(),
+                      if (_appliesTo == 'category') _buildMainCategoryDropdown(),
+                      if (_appliesTo == 'subcategory') _buildSubCategoryDropdown(),
+                      const SizedBox(height: 15),
+                      
+                      // اختيار التواريخ (مثل الـ HTML)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ListTile(
+                              title: const Text("تاريخ البدء", style: TextStyle(fontSize: 12)),
+                              subtitle: Text(_startDate == null ? "اختر تاريخ" : DateFormat('yyyy-MM-dd').format(_startDate!)),
+                              onTap: () async {
+                                DateTime? picked = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime(2024), lastDate: DateTime(2030));
+                                if (picked != null) setState(() => _startDate = picked);
+                              },
+                            ),
+                          ),
+                          Expanded(
+                            child: ListTile(
+                              title: const Text("تاريخ الانتهاء", style: TextStyle(fontSize: 12)),
+                              subtitle: Text(_endDate == null ? "اختر تاريخ" : DateFormat('yyyy-MM-dd').format(_endDate!)),
+                              onTap: () async {
+                                DateTime? picked = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime(2024), lastDate: DateTime(2030));
+                                if (picked != null) setState(() => _endDate = picked);
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 15),
+                      
+                      DropdownButtonFormField<String>(
+                        value: _targetType,
+                        decoration: const InputDecoration(labelText: "نوع التارجت", border: OutlineInputBorder()),
+                        items: const [
+                          DropdownMenuItem(value: 'none', child: Text("لا يوجد")),
+                          DropdownMenuItem(value: 'per_order', child: Text("لكل طلب")),
+                          DropdownMenuItem(value: 'cumulative_period', child: Text("تراكمي")),
+                        ],
+                        onChanged: (v) => setState(() => _targetType = v!),
+                      ),
+                      if (_targetType != 'none') ...[
+                        const SizedBox(height: 10),
+                        TextFormField(
+                          controller: _minPurchaseController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(labelText: "الحد الأدنى للشراء", border: OutlineInputBorder()),
+                        ),
                       ],
-                      onChanged: (v) => setState(() => _ruleType = v!),
-                    ),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _saveRule,
+                              icon: const Icon(Icons.save),
+                              label: Text(_editingRuleId == null ? "حفظ القاعدة" : "تحديث القاعدة"),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                            ),
+                          ),
+                          if (_editingRuleId != null) ...[
+                            const SizedBox(width: 10),
+                            ElevatedButton(
+                              onPressed: () => setState(() => _resetForm()),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
+                              child: const Text("إلغاء"),
+                            ),
+                          ]
+                        ],
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _valueController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: "القيمة", border: OutlineInputBorder()),
-                      validator: (v) => v!.isEmpty ? "مطلوب" : null,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 15),
-
-              // تطبق على (التاجر أو القسم)
-              DropdownButtonFormField<String>(
-                value: _appliesTo,
-                decoration: const InputDecoration(labelText: "تطبق على", border: OutlineInputBorder()),
-                items: const [
-                  DropdownMenuItem(value: 'all', child: Text("الجميع")),
-                  DropdownMenuItem(value: 'seller', child: Text("تاجر محدد")),
-                  DropdownMenuItem(value: 'category', child: Text("قسم رئيسي")),
-                  DropdownMenuItem(value: 'subcategory', child: Text("قسم فرعي")),
-                ],
-                onChanged: (v) => setState(() {
-                  _appliesTo = v!;
-                  _selectedSellerId = null;
-                  _selectedMainCatId = null;
-                  _selectedSubCatId = null;
-                }),
-              ),
-              const SizedBox(height: 15),
-
-              // القوائم المنسدلة الديناميكية (التحسين المطلوب)
-              if (_appliesTo == 'seller') _buildSellerDropdown(),
-              if (_appliesTo == 'category') _buildMainCategoryDropdown(),
-              if (_appliesTo == 'subcategory') _buildSubCategoryDropdown(),
-
-              const SizedBox(height: 15),
-
-              // نوع التارجت
-              DropdownButtonFormField<String>(
-                value: _targetType,
-                decoration: const InputDecoration(labelText: "نوع التارجت", border: OutlineInputBorder()),
-                items: const [
-                  DropdownMenuItem(value: 'none', child: Text("لا يوجد")),
-                  DropdownMenuItem(value: 'per_order', child: Text("لكل طلب")),
-                  DropdownMenuItem(value: 'cumulative_period', child: Text("تراكمي")),
-                ],
-                onChanged: (v) => setState(() => _targetType = v!),
-              ),
-              
-              if (_targetType != 'none') ...[
-                const SizedBox(height: 15),
-                TextFormField(
-                  controller: _minPurchaseController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: "الحد الأدنى للشراء", border: OutlineInputBorder()),
-                ),
-              ],
-
-              const SizedBox(height: 20),
-              
-              // زر الحفظ
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton.icon(
-                  onPressed: _saveRule,
-                  icon: const Icon(Icons.save),
-                  label: const Text("حفظ قاعدة الكاش باك", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
                 ),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 30),
+            
+            // قسم عرض القواعد الحالية (Rules List Section)
+            _buildSectionTitle("القواعد النشطة حالياً", Icons.list),
+            const SizedBox(height: 10),
+            _buildRulesList(),
+          ],
         ),
       ),
     );
   }
 
-  // --- منسدلة التجار ---
+  // --- بناء قائمة القواعد من Firestore ---
+  Widget _buildRulesList() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('cashbackRules').orderBy('createdAt', descending: true).snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        if (snapshot.data!.docs.isEmpty) return const Text("لا توجد قواعد حالياً");
+
+        return ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: snapshot.data!.docs.length,
+          itemBuilder: (context, index) {
+            var doc = snapshot.data!.docs[index];
+            var data = doc.data() as Map<String, dynamic>;
+            return Card(
+              margin: const EdgeInsets.only(bottom: 10),
+              child: ListTile(
+                leading: CircleAvatar(backgroundColor: Colors.redAccent.withOpacity(0.1), child: const Icon(Icons.percent, color: Colors.redAccent)),
+                title: Text(data['description'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text("القيمة: ${data['value']} | تطبق على: ${data['appliesTo']}"),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () => _editRule(doc)),
+                    IconButton(icon: const Icon(Icons.trash_canvas, color: Colors.red), onPressed: () => _deleteRule(doc.id)),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // --- دوال المساعدة للدروب داون ---
   Widget _buildSellerDropdown() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('sellers').snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const LinearProgressIndicator();
-        var docs = snapshot.data!.docs;
         return DropdownButtonFormField<String>(
           value: _selectedSellerId,
           hint: const Text("اختر التاجر"),
-          decoration: const InputDecoration(border: OutlineInputBorder()),
-          items: docs.map((d) {
+          items: snapshot.data!.docs.map((d) {
             var data = d.data() as Map<String, dynamic>;
-            return DropdownMenuItem(
-              value: d.id,
-              child: Text("${data['merchantName'] ?? 'بدون اسم'} (${data['phone'] ?? ''})"),
-            );
+            return DropdownMenuItem(value: d.id, child: Text("${data['merchantName']}"));
           }).toList(),
           onChanged: (v) {
             setState(() {
               _selectedSellerId = v;
-              var doc = docs.firstWhere((d) => d.id == v);
-              _selectedSellerName = (doc.data() as Map)['merchantName'];
+              _selectedSellerName = snapshot.data!.docs.firstWhere((d) => d.id == v).get('merchantName');
             });
           },
         );
@@ -183,7 +250,7 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
     );
   }
 
-  // --- منسدلة الأقسام الرئيسية ---
+  // (كرر نفس المنطق لـ MainCategory و SubCategory كما في الكود السابق)
   Widget _buildMainCategoryDropdown() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('mainCategory').snapshots(),
@@ -191,12 +258,8 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
         if (!snapshot.hasData) return const LinearProgressIndicator();
         return DropdownButtonFormField<String>(
           value: _selectedMainCatId,
-          hint: const Text("اختر القسم الرئيسي"),
-          decoration: const InputDecoration(border: OutlineInputBorder()),
-          items: snapshot.data!.docs.map((d) {
-            var data = d.data() as Map<String, dynamic>;
-            return DropdownMenuItem(value: d.id, child: Text(data['name'] ?? ''));
-          }).toList(),
+          hint: const Text("اختر القسم"),
+          items: snapshot.data!.docs.map((d) => DropdownMenuItem(value: d.id, child: Text(d.get('name')))).toList(),
           onChanged: (v) {
             setState(() {
               _selectedMainCatId = v;
@@ -208,7 +271,6 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
     );
   }
 
-  // --- منسدلة الأقسام الفرعية ---
   Widget _buildSubCategoryDropdown() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('subCategory').snapshots(),
@@ -217,11 +279,7 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
         return DropdownButtonFormField<String>(
           value: _selectedSubCatId,
           hint: const Text("اختر القسم الفرعي"),
-          decoration: const InputDecoration(border: OutlineInputBorder()),
-          items: snapshot.data!.docs.map((d) {
-            var data = d.data() as Map<String, dynamic>;
-            return DropdownMenuItem(value: d.id, child: Text(data['name'] ?? ''));
-          }).toList(),
+          items: snapshot.data!.docs.map((d) => DropdownMenuItem(value: d.id, child: Text(d.get('name')))).toList(),
           onChanged: (v) {
             setState(() {
               _selectedSubCatId = v;
@@ -233,48 +291,75 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
     );
   }
 
-  Widget _buildSectionTitle(String title, IconData icon) {
-    return Row(
-      children: [
-        Icon(icon, color: const Color(0xFF1A2C3D)),
-        const SizedBox(width: 10),
-        Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-      ],
-    );
+  void _editRule(DocumentSnapshot doc) {
+    var data = doc.data() as Map<String, dynamic>;
+    setState(() {
+      _editingRuleId = doc.id;
+      _descriptionController.text = data['description'] ?? '';
+      _valueController.text = data['value'].toString();
+      _ruleType = data['type'] ?? 'percentage';
+      _appliesTo = data['appliesTo'] ?? 'all';
+      _targetType = data['targetType'] ?? 'none';
+      _minPurchaseController.text = data['minPurchaseAmount'].toString();
+      _selectedSellerId = data['sellerId'];
+      _selectedMainCatId = data['mainCategoryId'];
+      _selectedSubCatId = data['subCategoryId'];
+      if (data['startDate'] != null) _startDate = (data['startDate'] as Timestamp).toDate();
+      if (data['endDate'] != null) _endDate = (data['endDate'] as Timestamp).toDate();
+    });
   }
 
-  // --- دالة حفظ القاعدة ---
+  void _deleteRule(String id) async {
+    bool? confirm = await showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("حذف"), content: const Text("هل أنت متأكد؟"), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("لا")), TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("نعم"))]));
+    if (confirm == true) await FirebaseFirestore.instance.collection('cashbackRules').doc(id).delete();
+  }
+
+  void _resetForm() {
+    _editingRuleId = null;
+    _descriptionController.clear();
+    _valueController.clear();
+    _minPurchaseController.clear();
+    _startDate = null;
+    _endDate = null;
+    _selectedSellerId = null;
+    _selectedMainCatId = null;
+    _selectedSubCatId = null;
+  }
+
   void _saveRule() async {
     if (_formKey.currentState!.validate()) {
-      try {
-        await FirebaseFirestore.instance.collection('cashbackRules').add({
-          'description': _descriptionController.text,
-          'type': _ruleType,
-          'value': double.tryParse(_valueController.text) ?? 0.0,
-          'appliesTo': _appliesTo,
-          'priority': int.tryParse(_priorityController.text) ?? 1,
-          'status': _isActive ? 'active' : 'inactive',
-          'targetType': _targetType,
-          'goalBasis': _targetType == 'per_order' ? 'single_order' : 'cumulative_spending',
-          'minPurchaseAmount': double.tryParse(_minPurchaseController.text) ?? 0.0,
-          
-          // إرسال الـ IDs والأسماء كما طلبت لتسهيل الفلترة
-          'sellerId': _selectedSellerId,
-          'sellerName': _selectedSellerName,
-          'mainCategoryId': _selectedMainCatId,
-          'mainCategoryName': _selectedMainCatName,
-          'subCategoryId': _selectedSubCatId,
-          'subCategoryName': _selectedSubCatName,
-          
-          'createdAt': FieldValue.serverTimestamp(),
-        });
+      var data = {
+        'description': _descriptionController.text,
+        'type': _ruleType,
+        'value': double.tryParse(_valueController.text) ?? 0.0,
+        'appliesTo': _appliesTo,
+        'targetType': _targetType,
+        'goalBasis': _targetType == 'per_order' ? 'single_order' : 'cumulative_spending',
+        'minPurchaseAmount': double.tryParse(_minPurchaseController.text) ?? 0.0,
+        'sellerId': _selectedSellerId,
+        'sellerName': _selectedSellerName,
+        'mainCategoryId': _selectedMainCatId,
+        'mainCategoryName': _selectedMainCatName,
+        'subCategoryId': _selectedSubCatId,
+        'subCategoryName': _selectedSubCatName,
+        'startDate': _startDate != null ? Timestamp.fromDate(_startDate!) : null,
+        'endDate': _endDate != null ? Timestamp.fromDate(_endDate!) : null,
+        'status': 'active',
+        'createdAt': FieldValue.serverTimestamp(),
+      };
 
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم حفظ القاعدة بنجاح!")));
-        Navigator.pop(context);
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ: $e")));
+      if (_editingRuleId == null) {
+        await FirebaseFirestore.instance.collection('cashbackRules').add(data);
+      } else {
+        await FirebaseFirestore.instance.collection('cashbackRules').doc(_editingRuleId).update(data);
       }
+      _resetForm();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم الحفظ بنجاح")));
     }
+  }
+
+  Widget _buildSectionTitle(String title, IconData icon) {
+    return Row(children: [Icon(icon, size: 20, color: const Color(0xFF1A2C3D)), const SizedBox(width: 8), Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, fontFamily: 'Cairo'))]);
   }
 }
 
