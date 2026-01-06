@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart'; // ستحتاج لإضافة intl: ^0.19.0 في pubspec.yaml
+import 'package:intl/intl.dart';
 
 class CashbackManagementScreen extends StatefulWidget {
   const CashbackManagementScreen({super.key});
@@ -11,27 +11,26 @@ class CashbackManagementScreen extends StatefulWidget {
 
 class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
   final _formKey = GlobalKey<FormState>();
-  String? _editingRuleId; // لتحديد ما إذا كنا نعدل قاعدة موجودة
+  String? _editingRuleId;
 
   // الـ Controllers
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _valueController = TextEditingController();
-  final TextEditingController _priorityController = TextEditingController(text: "1");
   final TextEditingController _minPurchaseController = TextEditingController();
 
   // متغيرات الحالة
   String _ruleType = 'percentage';
   String _appliesTo = 'all';
   String _targetType = 'none';
-  bool _isActive = true;
 
   // التواريخ
   DateTime? _startDate;
   DateTime? _endDate;
 
-  // الاختيارات
-  String? _selectedSellerId, _selectedMainCatId, _selectedSubCatId;
-  String? _selectedSellerName, _selectedMainCatName, _selectedSubCatName;
+  // الاختيارات المتقدمة (تشمل البيانات الإضافية للتاجر)
+  String? _selectedSellerId, _selectedSellerName, _selectedSellerPhone, _selectedSellerLogo;
+  String? _selectedMainCatId, _selectedMainCatName;
+  String? _selectedSubCatId, _selectedSubCatName;
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +45,7 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // قسم النموذج (Form Section)
+            // قسم النموذج
             Card(
               elevation: 4,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -61,7 +60,7 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
                       const SizedBox(height: 15),
                       TextFormField(
                         controller: _descriptionController,
-                        decoration: const InputDecoration(labelText: "وصف القاعدة", border: OutlineInputBorder()),
+                        decoration: const InputDecoration(labelText: "وصف القاعدة (مثلاً: عرض الشتاء)", border: OutlineInputBorder()),
                         validator: (v) => v!.isEmpty ? "مطلوب" : null,
                       ),
                       const SizedBox(height: 15),
@@ -94,7 +93,7 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
                         value: _appliesTo,
                         decoration: const InputDecoration(labelText: "تطبق على", border: OutlineInputBorder()),
                         items: const [
-                          DropdownMenuItem(value: 'all', child: Text("الجميع")),
+                          DropdownMenuItem(value: 'all', child: Text("كل التجار")),
                           DropdownMenuItem(value: 'seller', child: Text("تاجر محدد")),
                           DropdownMenuItem(value: 'category', child: Text("قسم رئيسي")),
                           DropdownMenuItem(value: 'subcategory', child: Text("قسم فرعي")),
@@ -102,12 +101,13 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
                         onChanged: (v) => setState(() { _appliesTo = v!; }),
                       ),
                       const SizedBox(height: 15),
+                      
+                      // حقول الاختيار الديناميكية
                       if (_appliesTo == 'seller') _buildSellerDropdown(),
                       if (_appliesTo == 'category') _buildMainCategoryDropdown(),
                       if (_appliesTo == 'subcategory') _buildSubCategoryDropdown(),
+
                       const SizedBox(height: 15),
-                      
-                      // اختيار التواريخ (مثل الـ HTML)
                       Row(
                         children: [
                           Expanded(
@@ -133,14 +133,13 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
                         ],
                       ),
                       const SizedBox(height: 15),
-                      
                       DropdownButtonFormField<String>(
                         value: _targetType,
                         decoration: const InputDecoration(labelText: "نوع التارجت", border: OutlineInputBorder()),
                         items: const [
-                          DropdownMenuItem(value: 'none', child: Text("لا يوجد")),
-                          DropdownMenuItem(value: 'per_order', child: Text("لكل طلب")),
-                          DropdownMenuItem(value: 'cumulative_period', child: Text("تراكمي")),
+                          DropdownMenuItem(value: 'none', child: Text("لا يوجد (كاش باك مباشر)")),
+                          DropdownMenuItem(value: 'per_order', child: Text("لكل طلب (تارجت فاتورة)")),
+                          DropdownMenuItem(value: 'cumulative_period', child: Text("تراكمي (تارجت فترة)")),
                         ],
                         onChanged: (v) => setState(() => _targetType = v!),
                       ),
@@ -149,7 +148,7 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
                         TextFormField(
                           controller: _minPurchaseController,
                           keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(labelText: "الحد الأدنى للشراء", border: OutlineInputBorder()),
+                          decoration: const InputDecoration(labelText: "الحد الأدنى لقيمة المشتريات", border: OutlineInputBorder()),
                         ),
                       ],
                       const SizedBox(height: 20),
@@ -159,8 +158,8 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
                             child: ElevatedButton.icon(
                               onPressed: _saveRule,
                               icon: const Icon(Icons.save),
-                              label: Text(_editingRuleId == null ? "حفظ القاعدة" : "تحديث القاعدة"),
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                              label: Text(_editingRuleId == null ? "حفظ القاعدة" : "تحديث البيانات"),
+                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1ABC9C), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 12)),
                             ),
                           ),
                           if (_editingRuleId != null) ...[
@@ -179,9 +178,7 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
               ),
             ),
             const SizedBox(height: 30),
-            
-            // قسم عرض القواعد الحالية (Rules List Section)
-            _buildSectionTitle("القواعد النشطة حالياً", Icons.list),
+            _buildSectionTitle("قواعد الكاش باك النشطة", Icons.list),
             const SizedBox(height: 10),
             _buildRulesList(),
           ],
@@ -190,14 +187,77 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
     );
   }
 
-  // --- بناء قائمة القواعد من Firestore ---
+  // --- دوال المساعدة للدروب داون مع سحب البيانات الكاملة ---
+  Widget _buildSellerDropdown() {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection('sellers').snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const LinearProgressIndicator();
+        return DropdownButtonFormField<String>(
+          value: _selectedSellerId,
+          hint: const Text("اختر التاجر المستهدف"),
+          items: snapshot.data!.docs.map((d) {
+            var data = d.data() as Map<String, dynamic>;
+            return DropdownMenuItem(value: d.id, child: Text("${data['merchantName']}"));
+          }).toList(),
+          onChanged: (v) {
+            var sellerDoc = snapshot.data!.docs.firstWhere((d) => d.id == v);
+            var sellerData = sellerDoc.data() as Map<String, dynamic>;
+            setState(() {
+              _selectedSellerId = v;
+              _selectedSellerName = sellerData['merchantName'];
+              _selectedSellerPhone = sellerData['phone'] ?? '';
+              _selectedSellerLogo = sellerData['MerchantLogoUrl'] ?? ''; // الحقل المطلوب بدقة
+            });
+          },
+        );
+      },
+    );
+  }
+
+  // --- دالة حفظ القاعدة (النسخة الصارمة) ---
+  void _saveRule() async {
+    if (_formKey.currentState!.validate()) {
+      var data = {
+        'description': _descriptionController.text,
+        'type': _ruleType,
+        'value': double.tryParse(_valueController.text) ?? 0.0,
+        'appliesTo': _appliesTo,
+        'targetType': _targetType,
+        'minPurchaseAmount': double.tryParse(_minPurchaseController.text) ?? 0.0,
+        // حفظ بيانات التاجر المدمجة للسرعة في تطبيق المناديب
+        'sellerId': _appliesTo == 'seller' ? _selectedSellerId : null,
+        'sellerName': _appliesTo == 'seller' ? _selectedSellerName : null,
+        'sellerPhone': _appliesTo == 'seller' ? _selectedSellerPhone : null,
+        'sellerLogo': _appliesTo == 'seller' ? _selectedSellerLogo : null,
+        // حفظ بيانات الأقسام
+        'mainCategoryId': _appliesTo == 'category' ? _selectedMainCatId : null,
+        'mainCategoryName': _appliesTo == 'category' ? _selectedMainCatName : null,
+        'subCategoryId': _appliesTo == 'subcategory' ? _selectedSubCatId : null,
+        'subCategoryName': _appliesTo == 'subcategory' ? _selectedSubCatName : null,
+        // التواريخ
+        'startDate': _startDate != null ? Timestamp.fromDate(_startDate!) : null,
+        'endDate': _endDate != null ? Timestamp.fromDate(_endDate!) : null,
+        'status': 'active',
+        'createdAt': FieldValue.serverTimestamp(),
+      };
+
+      if (_editingRuleId == null) {
+        await FirebaseFirestore.instance.collection('cashbackRules').add(data);
+      } else {
+        await FirebaseFirestore.instance.collection('cashbackRules').doc(_editingRuleId).update(data);
+      }
+      _resetForm();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم حفظ القاعدة بنجاح")));
+    }
+  }
+
+  // --- قائمة عرض القواعد مع صور التجار ---
   Widget _buildRulesList() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('cashbackRules').orderBy('createdAt', descending: true).snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        if (snapshot.data!.docs.isEmpty) return const Text("لا توجد قواعد حالياً");
-
         return ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -208,15 +268,17 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
             return Card(
               margin: const EdgeInsets.only(bottom: 10),
               child: ListTile(
-                leading: CircleAvatar(backgroundColor: Colors.redAccent.withOpacity(0.1), child: const Icon(Icons.percent, color: Colors.redAccent)),
+                leading: (data['sellerLogo'] != null && data['sellerLogo'] != '') 
+                   ? CircleAvatar(backgroundImage: NetworkImage(data['sellerLogo']))
+                   : CircleAvatar(backgroundColor: Colors.teal.withOpacity(0.1), child: const Icon(Icons.percent, color: Colors.teal)),
                 title: Text(data['description'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text("القيمة: ${data['value']} | تطبق على: ${data['appliesTo']}"),
+                subtitle: Text("التاجر: ${data['sellerName'] ?? 'الجميع'} \nالقيمة: ${data['value']}${data['type'] == 'percentage' ? '%' : ' ج.م'}"),
+                isThreeLine: true,
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () => _editRule(doc)),
                     IconButton(icon: const Icon(Icons.delete_outline, color: Colors.red), onPressed: () => _deleteRule(doc.id)),
-
                   ],
                 ),
               ),
@@ -227,31 +289,7 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
     );
   }
 
-  // --- دوال المساعدة للدروب داون ---
-  Widget _buildSellerDropdown() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('sellers').snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const LinearProgressIndicator();
-        return DropdownButtonFormField<String>(
-          value: _selectedSellerId,
-          hint: const Text("اختر التاجر"),
-          items: snapshot.data!.docs.map((d) {
-            var data = d.data() as Map<String, dynamic>;
-            return DropdownMenuItem(value: d.id, child: Text("${data['merchantName']}"));
-          }).toList(),
-          onChanged: (v) {
-            setState(() {
-              _selectedSellerId = v;
-              _selectedSellerName = snapshot.data!.docs.firstWhere((d) => d.id == v).get('merchantName');
-            });
-          },
-        );
-      },
-    );
-  }
-
-  // (كرر نفس المنطق لـ MainCategory و SubCategory كما في الكود السابق)
+  // الدوال المساعدة للأقسام (رئيسي وفرعي)
   Widget _buildMainCategoryDropdown() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('mainCategory').snapshots(),
@@ -259,7 +297,7 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
         if (!snapshot.hasData) return const LinearProgressIndicator();
         return DropdownButtonFormField<String>(
           value: _selectedMainCatId,
-          hint: const Text("اختر القسم"),
+          hint: const Text("اختر القسم الرئيسي"),
           items: snapshot.data!.docs.map((d) => DropdownMenuItem(value: d.id, child: Text(d.get('name')))).toList(),
           onChanged: (v) {
             setState(() {
@@ -303,15 +341,20 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
       _targetType = data['targetType'] ?? 'none';
       _minPurchaseController.text = data['minPurchaseAmount'].toString();
       _selectedSellerId = data['sellerId'];
+      _selectedSellerName = data['sellerName'];
+      _selectedSellerLogo = data['sellerLogo'];
+      _selectedSellerPhone = data['sellerPhone'];
       _selectedMainCatId = data['mainCategoryId'];
+      _selectedMainCatName = data['mainCategoryName'];
       _selectedSubCatId = data['subCategoryId'];
+      _selectedSubCatName = data['subCategoryName'];
       if (data['startDate'] != null) _startDate = (data['startDate'] as Timestamp).toDate();
       if (data['endDate'] != null) _endDate = (data['endDate'] as Timestamp).toDate();
     });
   }
 
   void _deleteRule(String id) async {
-    bool? confirm = await showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("حذف"), content: const Text("هل أنت متأكد؟"), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("لا")), TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("نعم"))]));
+    bool? confirm = await showDialog(context: context, builder: (ctx) => AlertDialog(title: const Text("حذف القاعدة"), content: const Text("هل أنت متأكد من رغبتك في حذف هذه القاعدة نهائياً؟"), actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("إلغاء")), TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("تأكيد الحذف", style: TextStyle(color: Colors.red)))]));
     if (confirm == true) await FirebaseFirestore.instance.collection('cashbackRules').doc(id).delete();
   }
 
@@ -323,40 +366,11 @@ class _CashbackManagementScreenState extends State<CashbackManagementScreen> {
     _startDate = null;
     _endDate = null;
     _selectedSellerId = null;
+    _selectedSellerName = null;
+    _selectedSellerLogo = null;
+    _selectedSellerPhone = null;
     _selectedMainCatId = null;
     _selectedSubCatId = null;
-  }
-
-  void _saveRule() async {
-    if (_formKey.currentState!.validate()) {
-      var data = {
-        'description': _descriptionController.text,
-        'type': _ruleType,
-        'value': double.tryParse(_valueController.text) ?? 0.0,
-        'appliesTo': _appliesTo,
-        'targetType': _targetType,
-        'goalBasis': _targetType == 'per_order' ? 'single_order' : 'cumulative_spending',
-        'minPurchaseAmount': double.tryParse(_minPurchaseController.text) ?? 0.0,
-        'sellerId': _selectedSellerId,
-        'sellerName': _selectedSellerName,
-        'mainCategoryId': _selectedMainCatId,
-        'mainCategoryName': _selectedMainCatName,
-        'subCategoryId': _selectedSubCatId,
-        'subCategoryName': _selectedSubCatName,
-        'startDate': _startDate != null ? Timestamp.fromDate(_startDate!) : null,
-        'endDate': _endDate != null ? Timestamp.fromDate(_endDate!) : null,
-        'status': 'active',
-        'createdAt': FieldValue.serverTimestamp(),
-      };
-
-      if (_editingRuleId == null) {
-        await FirebaseFirestore.instance.collection('cashbackRules').add(data);
-      } else {
-        await FirebaseFirestore.instance.collection('cashbackRules').doc(_editingRuleId).update(data);
-      }
-      _resetForm();
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم الحفظ بنجاح")));
-    }
   }
 
   Widget _buildSectionTitle(String title, IconData icon) {
