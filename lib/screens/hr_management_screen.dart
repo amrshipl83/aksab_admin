@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
-import 'sales_management_screen.dart'; // استيراد صفحة المبيعات
-import 'staff_management_delivery.dart'; // استيراد صفحة التحصيل والدليفري
+import 'sales_management_screen.dart'; 
+import 'staff_management_delivery.dart'; 
 
 class HRManagementScreen extends StatelessWidget {
   const HRManagementScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // تحديد عرض الشاشة لضبط التصميم
     double screenWidth = MediaQuery.of(context).size.width;
     bool isMobile = screenWidth < 800;
 
@@ -43,11 +42,8 @@ class HRManagementScreen extends StatelessWidget {
               style: TextStyle(fontFamily: 'Cairo', color: Colors.grey),
             ),
             const SizedBox(height: 30),
-            
-            // شبكة الكروت المتوافقة مع الشاشات
             Expanded(
               child: GridView.count(
-                // 3 أعمدة للويب و 1 للموبايل
                 crossAxisCount: isMobile ? 1 : 3,
                 crossAxisSpacing: 20,
                 mainAxisSpacing: 20,
@@ -59,9 +55,7 @@ class HRManagementScreen extends StatelessWidget {
                     subtitle: "إدارة المديرين والمشرفين",
                     icon: Icons.admin_panel_settings,
                     color: Colors.blue,
-                    onTap: () {
-                      // سيتم ربطها لاحقاً
-                    },
+                    onTap: () {},
                   ),
                   _buildHRCard(
                     context,
@@ -83,10 +77,10 @@ class HRManagementScreen extends StatelessWidget {
                     icon: Icons.local_shipping,
                     color: Colors.green,
                     onTap: () {
-                      // تم إزالة const هنا لإصلاح خطأ البناء
+                      // تم حذف const من هنا تماماً
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => const StaffManagementDelivery()),
+                        MaterialPageRoute(builder: (context) => StaffManagementDelivery()),
                       );
                     },
                   ),
