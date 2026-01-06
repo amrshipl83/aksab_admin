@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
-// استيراد التبويبات من المجلد الفرعي tabs
-import 'tabs/pending_free_drivers_tab.dart';
-import 'tabs/pending_staff_tab.dart';
-import 'tabs/active_free_drivers_tab.dart'; // التبويب الثالث المضاف حديثاً
+
+// استيراد كافة التبويبات التي قمنا ببنائها
+import 'tabs/pending_free_drivers_tab.dart';    // 1. انتظار (حر)
+import 'tabs/pending_staff_tab.dart';           // 2. انتظار (موظفين)
+import 'tabs/active_free_drivers_tab.dart';     // 3. المناديب الأحرار
+import 'tabs/company_reps_tab.dart';            // 4. مناديب الشركة
+import 'tabs/managers_tab.dart';                // 5. المشرفين والمديرين
 
 class StaffManagementMain extends StatefulWidget {
   const StaffManagementMain({super.key});
@@ -17,7 +20,7 @@ class _StaffManagementMainState extends State<StaffManagementMain> with SingleTi
   @override
   void initState() {
     super.initState();
-    // 5 تابات مقسمة حسب منطق قاعدة البيانات لدينا
+    // تم تهيئة 5 تابات تغطي كامل الهيكل الهرمي للنظام
     _tabController = TabController(length: 5, vsync: this);
   }
 
@@ -36,14 +39,20 @@ class _StaffManagementMainState extends State<StaffManagementMain> with SingleTi
           style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)
         ),
         backgroundColor: const Color(0xFF1A2C3D),
-        foregroundColor: Colors.white, // لضمان ظهور الأيقونات باللون الأبيض
+        foregroundColor: Colors.white,
+        elevation: 0,
         bottom: TabBar(
           controller: _tabController,
-          isScrollable: true, // للسماح بالتنقل السلس بين الـ 5 أقسام
+          isScrollable: true, // ضروري لأن عدد التابات 5 وعناوينها طويلة نسبياً
           indicatorColor: Colors.orange,
+          indicatorWeight: 3,
           labelColor: Colors.orange,
           unselectedLabelColor: Colors.white70,
-          labelStyle: const TextStyle(fontFamily: 'Cairo', fontSize: 12, fontWeight: FontWeight.bold),
+          labelStyle: const TextStyle(
+            fontFamily: 'Cairo', 
+            fontSize: 12, 
+            fontWeight: FontWeight.bold
+          ),
           tabs: const [
             Tab(icon: Icon(Icons.motorcycle), text: "انتظار (حر)"),
             Tab(icon: Icon(Icons.person_add_alt_1), text: "انتظار (موظفين)"),
@@ -53,40 +62,27 @@ class _StaffManagementMainState extends State<StaffManagementMain> with SingleTi
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // 1. التبويب الأول: طلبات المناديب الأحرار
-          const PendingFreeDriversTab(),
+      body: Container(
+        color: const Color(0xFFF5F7F9), // لون خلفية خفيف للراحة البصرية
+        child: TabBarView(
+          controller: _tabController,
+          children: const [
+            // 1. طلبات المناديب الأحرار (تفعيل مباشر)
+            PendingFreeDriversTab(),
 
-          // 2. التبويب الثاني: طلبات الموظفين (مناديب شركة + مديرين)
-          const PendingStaffTab(),
+            // 2. طلبات الموظفين (فلترة: تحصيل فقط + نافذة بيانات مالية)
+            PendingStaffTab(),
 
-          // 3. التبويب الثالث: المناديب الأحرار المعتمدين (التحكم في الائتمان والحالة)
-          const ActiveFreeDriversTab(),
+            // 3. المناديب الأحرار المعتمدين (تحكم في الائتمان وحالة الاتصال)
+            ActiveFreeDriversTab(),
 
-          // التبويبات القادمة (سيتم استبدالها بملفات منفصلة تباعاً)
-          _buildPlaceholder("مناديب الشركة المعتمدين (deliveryReps)"),
-          _buildPlaceholder("المشرفين والمديرين (managers)"),
-        ],
-      ),
-    );
-  }
+            // 4. مناديب الشركة (تعديل الراتب + اختيار المشرف من قائمة منسدلة)
+            CompanyRepsTab(),
 
-  // ويدجت مؤقت للأقسام التي لم تبرمج بعد
-  Widget _buildPlaceholder(String title) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.construction, size: 50, color: Colors.grey),
-          const SizedBox(height: 10),
-          Text(
-            title,
-            style: const TextStyle(fontFamily: 'Cairo', color: Colors.grey),
-            textAlign: TextAlign.center,
-          ),
-        ],
+            // 5. الإدارة (تعديل بيانات المشرفين والمديرين + ربط التسلسل الهرمي)
+            ManagersTab(),
+          ],
+        ),
       ),
     );
   }
