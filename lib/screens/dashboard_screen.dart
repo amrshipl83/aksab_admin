@@ -10,7 +10,8 @@ import '../pages/sellers_page.dart';
 
 // استيراد الشاشات الجديدة
 import '../screens/delivery_management_screen.dart';
-import '../screens/hr_management_screen.dart'; // تم إضافة الاستيراد هنا
+import '../screens/hr_management_screen.dart';
+import '../screens/marketing/marketing_management_screen.dart'; // الربط الجديد هنا
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -157,14 +158,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
               );
             }),
             _buildSidebarItem(Icons.settings, "الإعدادات", () {}),
-            // تم تفعيل ربط الموارد البشرية هنا
             _buildSidebarItem(Icons.assignment_ind, "الموارد البشرية", () {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const HRManagementScreen()),
               );
             }),
-            _buildSidebarItem(Icons.add_photo_alternate, "ادارة التسويق", () {}),
+            // تم تفعيل ربط إدارة التسويق هنا
+            _buildSidebarItem(Icons.add_photo_alternate, "ادارة التسويق", () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const MarketingManagementScreen()),
+              );
+            }),
             _buildSidebarItem(Icons.warehouse, "ادارة المخازن والمشتريات", () {}),
             _buildSidebarItem(Icons.paid, "الإدارة المالية", () {}, color: const Color(0xFF10B981)),
             _buildSidebarItem(Icons.security, "الاستخدام والخصوصية", () {}),
