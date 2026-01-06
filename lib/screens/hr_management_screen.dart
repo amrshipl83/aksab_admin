@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'sales_management_screen.dart'; // استيراد صفحة المبيعات الجديدة
+import 'sales_management_screen.dart'; // استيراد صفحة المبيعات
+import 'staff_management_delivery.dart'; // استيراد الصفحة الجديدة التي أنشأناها للهيكل الموحد
 
 class HRManagementScreen extends StatelessWidget {
   const HRManagementScreen({super.key});
@@ -50,7 +51,6 @@ class HRManagementScreen extends StatelessWidget {
                 crossAxisCount: isMobile ? 1 : 3,
                 crossAxisSpacing: 20,
                 mainAxisSpacing: 20,
-                // ضبط نسبة الطول للعرض لتناسب المحتوى
                 childAspectRatio: isMobile ? 2.0 : 1.3,
                 children: [
                   _buildHRCard(
@@ -60,7 +60,7 @@ class HRManagementScreen extends StatelessWidget {
                     icon: Icons.admin_panel_settings,
                     color: Colors.blue,
                     onTap: () {
-                      // سيتم ربطها لاحقاً
+                      // سيتم ربطها بتبويب المشرفين في صفحة التحصيل أو صفحة منفصلة حسب رغبتك
                     },
                   ),
                   _buildHRCard(
@@ -70,7 +70,6 @@ class HRManagementScreen extends StatelessWidget {
                     icon: Icons.trending_up,
                     color: Colors.orange,
                     onTap: () {
-                      // الربط الفعلي مع الصفحة الجديدة المقسمة
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (context) => const SalesManagementScreen()),
@@ -84,7 +83,11 @@ class HRManagementScreen extends StatelessWidget {
                     icon: Icons.local_shipping,
                     color: Colors.green,
                     onTap: () {
-                      // سيتم ربطها لاحقاً
+                      // الربط الفعلي مع صفحة الهيكل الموحد التي أنشأناها
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const StaffManagementDelivery()),
+                      );
                     },
                   ),
                 ],
