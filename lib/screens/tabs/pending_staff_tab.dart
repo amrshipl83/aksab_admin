@@ -7,13 +7,12 @@ class PendingStaffTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<QueryDocumentSnapshot>>(
-      // دمج تيار البيانات من المجموعتين
       stream: _getCombinedPendingStream(),
       builder: (context, snapshot) {
         if (snapshot.hasError) return const Center(child: Text("خطأ في الاتصال"));
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(child: Text("لا توجد طلبات توظيف معلقة", style: TextStyle(fontFamily: 'Cairo')));
+          return const Center(child: Text("لا توجد طلبات توظيف معلقة للتحصيل", style: TextStyle(fontFamily: 'Cairo')));
         }
 
         return ListView.builder(
@@ -22,8 +21,9 @@ class PendingStaffTab extends StatelessWidget {
           itemBuilder: (context, index) {
             var doc = snapshot.data![index];
             var data = doc.data() as Map<String, dynamic>;
+            // نتحقق إذا كان المستند من مجموعة المديرين
             bool isManager = doc.reference.path.contains('pendingManagers');
-            
+
             return _buildStaffRequestCard(context, doc.id, data, isManager);
           },
         );
@@ -31,30 +31,43 @@ class PendingStaffTab extends StatelessWidget {
     );
   }
 
-  // دالة لدمج مجموعتي الانتظار (Reps & Managers)
+  // الدالة المحدثة بفلترة الأدوار
   Stream<List<QueryDocumentSnapshot>> _getCombinedPendingStream() {
-    var reps = FirebaseFirestore.instance.collection('pendingReps').snapshots();
-    var mgrs = FirebaseFirestore.instance.collection('pendingManagers').snapshots();
-    
-    // ملاحظة: للتبسيط في العرض نستخدم StreamZip أو ندمج يدوياً
-    // هنا سنستخدم دمج بسيط للمجموعات (بافتراض التحديث التلقائي)
-    return FirebaseFirestore.instance.collection('pendingReps').snapshots().map((repsSnap) => repsSnap.docs)
+    return FirebaseFirestore.instance
+        .collection('pendingReps')
+        .where('role', isEqualTo: 'delivery_rep') // جلب مناديب التحصيل فقط وتجاهل sales_rep
+        .snapshots()
+        .map((repsSnap) => repsSnap.docs)
         .asyncMap((repsDocs) async {
-          var mgrsSnap = await FirebaseFirestore.instance.collection('pendingManagers').get();
+          // جلب المديرين والمشرفين المعلقين بشرط أن يكونوا تابعين لقسم التحصيل
+          var mgrsSnap = await FirebaseFirestore.instance
+              .collection('pendingManagers')
+              .where('role', whereIn: ['delivery_manager', 'delivery_supervisor'])
+              .get();
+          
+          // دمج النتائج المفلترة
           return [...repsDocs, ...mgrsSnap.docs];
         });
   }
 
   Widget _buildStaffRequestCard(BuildContext context, String uid, Map<String, dynamic> data, bool isManager) {
-    String roleLabel = isManager ? "إدارة / إشراف" : "مندوب تحصيل";
-    
+    // تحديد المسمى الوظيفي بناءً على الدور الفعلي المخزن
+    String roleLabel = "موظف";
+    if (data['role'] == 'delivery_manager') roleLabel = "مدير تحصيل";
+    if (data['role'] == 'delivery_supervisor') roleLabel = "مشرف تحصيل";
+    if (data['role'] == 'delivery_rep') roleLabel = "مندوب تحصيل شركة";
+
     return Card(
+      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 10),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       child: ListTile(
         leading: CircleAvatar(
           backgroundColor: isManager ? Colors.green.shade100 : Colors.orange.shade100,
-          child: Icon(isManager ? Icons.admin_panel_settings : Icons.badge, 
-               color: isManager ? Colors.green : Colors.orange),
+          child: Icon(
+            isManager ? Icons.admin_panel_settings : Icons.badge,
+            color: isManager ? Colors.green : Colors.orange,
+          ),
         ),
         title: Text(data['fullname'] ?? '', style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
         subtitle: Text("$roleLabel | ${data['phone']}", style: const TextStyle(fontFamily: 'Cairo', fontSize: 12)),
@@ -67,9 +80,10 @@ class PendingStaffTab extends StatelessWidget {
     );
   }
 
-  // نافذة التفعيل (بديل الـ Modal في HTML)
   void _openActivationDialog(BuildContext context, String uid, Map<String, dynamic> data, bool isManager) {
-    final TextEditingController codeController = TextEditingController(text: "${isManager ? 'MGR' : 'REP'}-${data['phone']}");
+    // توليد الكود تلقائياً بناءً على الدور
+    String prefix = (data['role'] == 'delivery_rep') ? "REP-" : "MGR-";
+    final TextEditingController codeController = TextEditingController(text: "$prefix${data['phone']}");
     final TextEditingController salaryController = TextEditingController(text: "4000");
     final TextEditingController commController = TextEditingController(text: "0");
     final TextEditingController supIdController = TextEditingController(text: "91nXwJXt3LzH09Ox46La");
@@ -90,7 +104,9 @@ class PendingStaffTab extends StatelessWidget {
                   Expanded(child: TextField(controller: commController, decoration: const InputDecoration(labelText: "العمولة %"), keyboardType: TextInputType.number)),
                 ],
               ),
-              if (!isManager) TextField(controller: supIdController, decoration: const InputDecoration(labelText: "معرف المشرف المسؤول")),
+              // المندوب فقط يحتاج لتحديد مشرف
+              if (data['role'] == 'delivery_rep') 
+                TextField(controller: supIdController, decoration: const InputDecoration(labelText: "معرف المشرف المسؤول")),
             ],
           ),
         ),
@@ -104,7 +120,7 @@ class PendingStaffTab extends StatelessWidget {
               'supId': supIdController.text,
             }),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-            child: const Text("تأكيد التفعيل", style: TextStyle(color: Colors.white)),
+            child: const Text("تأكيد التفعيل", style: TextStyle(color: Colors.white, fontFamily: 'Cairo')),
           ),
         ],
       ),
@@ -113,7 +129,8 @@ class PendingStaffTab extends StatelessWidget {
 
   Future<void> _executeActivation(BuildContext context, String uid, Map<String, dynamic> data, bool isManager, Map<String, dynamic> inputs) async {
     try {
-      String targetCol = isManager ? "managers" : "deliveryReps";
+      // تحديد المجموعات بناءً على الدور
+      String targetCol = (data['role'] == 'delivery_rep') ? "deliveryReps" : "managers";
       String sourceCol = isManager ? "pendingManagers" : "pendingReps";
 
       final payload = {
@@ -126,7 +143,7 @@ class PendingStaffTab extends StatelessWidget {
         'uid': uid,
       };
 
-      if (!isManager) {
+      if (data['role'] == 'delivery_rep') {
         payload['supervisorId'] = inputs['supId'];
         payload['walletBalance'] = 0;
       }
@@ -136,7 +153,10 @@ class PendingStaffTab extends StatelessWidget {
 
       if (context.mounted) {
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("تم نقل ${data['fullname']} إلى $targetCol")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("تم بنجاح نقل ${data['fullname']} إلى مجموعة $targetCol"),
+          backgroundColor: Colors.green,
+        ));
       }
     } catch (e) {
       debugPrint("Error: $e");

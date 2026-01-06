@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 // استيراد التبويبات من المجلد الفرعي tabs
-import 'tabs/pending_free_drivers_tab.dart'; 
-import 'tabs/pending_staff_tab.dart'; 
+import 'tabs/pending_free_drivers_tab.dart';
+import 'tabs/pending_staff_tab.dart';
+import 'tabs/active_free_drivers_tab.dart'; // التبويب الثالث المضاف حديثاً
 
 class StaffManagementMain extends StatefulWidget {
   const StaffManagementMain({super.key});
@@ -31,7 +32,7 @@ class _StaffManagementMainState extends State<StaffManagementMain> with SingleTi
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          "إدارة طاقم العمل والشركاء", 
+          "إدارة طاقم العمل والشركاء",
           style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)
         ),
         backgroundColor: const Color(0xFF1A2C3D),
@@ -61,8 +62,10 @@ class _StaffManagementMainState extends State<StaffManagementMain> with SingleTi
           // 2. التبويب الثاني: طلبات الموظفين (مناديب شركة + مديرين)
           const PendingStaffTab(),
 
-          // 3. التبويبات القادمة (سيتم استبدالها بملفات منفصلة تباعاً)
-          _buildPlaceholder("المناديب الأحرار المعتمدين (freeDrivers)"),
+          // 3. التبويب الثالث: المناديب الأحرار المعتمدين (التحكم في الائتمان والحالة)
+          const ActiveFreeDriversTab(),
+
+          // التبويبات القادمة (سيتم استبدالها بملفات منفصلة تباعاً)
           _buildPlaceholder("مناديب الشركة المعتمدين (deliveryReps)"),
           _buildPlaceholder("المشرفين والمديرين (managers)"),
         ],
@@ -79,7 +82,7 @@ class _StaffManagementMainState extends State<StaffManagementMain> with SingleTi
           const Icon(Icons.construction, size: 50, color: Colors.grey),
           const SizedBox(height: 10),
           Text(
-            title, 
+            title,
             style: const TextStyle(fontFamily: 'Cairo', color: Colors.grey),
             textAlign: TextAlign.center,
           ),
