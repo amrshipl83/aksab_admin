@@ -13,20 +13,19 @@ class _InventoryHubState extends State<InventoryHub> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    // لدينا 3 أقسام بناءً على كود الـ HTML الخاص بك
     _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      app_bar: AppBar(
+      // ✅ تم التصحيح هنا من app_bar إلى appBar
+      appBar: AppBar(
         title: const Text('إدارة المشتريات والمخازن', style: TextStyle(fontFamily: 'Cairo')),
-        backgroundColor: const Color(0xFF1A2C3D), // نفس لون الـ Sidebar في الـ HTML
+        backgroundColor: const Color(0xFF1F2937), // توحيد اللون مع الداشبورد الأصلي
         bottom: TabBar(
           controller: _tabController,
-          indicatorColor: const Color(0xFFF57C00), // البرتقالي المميز في الـ CSS
-          labelStyle: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold),
+          indicatorColor: const Color(0xFFF57C00), 
           tabs: const [
             Tab(icon: Icon(Icons.shopping_bag), text: "المشتريات"),
             Tab(icon: Icon(Icons.inventory), text: "رصيد المخزن"),
@@ -37,10 +36,9 @@ class _InventoryHubState extends State<InventoryHub> with SingleTickerProviderSt
       body: TabBarView(
         controller: _tabController,
         children: [
-          // هنا نضع الصفحات الفعلية لكل قسم
-          _buildPlaceholder("صفحة تسجيل المشتريات والتكاليف (cost.html)"),
-          _buildPlaceholder("صفحة جرد المخزن الرئيسي (inventory_balance.html)"),
-          _buildPlaceholder("صفحة جرد رفوف المتجر (store_inventory.html)"),
+          _buildPlaceholder("صفحة تسجيل المشتريات والتكاليف"),
+          _buildPlaceholder("صفحة جرد المخزن الرئيسي"),
+          _buildPlaceholder("صفحة جرد رفوف المتجر"),
         ],
       ),
     );
