@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'Financial/financial_summary_screen.dart'; // ✅ الاستيراد الصحيح للمسار الجديد
 
 class FinancialDashboard extends StatelessWidget {
   const FinancialDashboard({super.key});
@@ -24,7 +25,7 @@ class FinancialDashboard extends StatelessWidget {
           style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
-        backgroundColor: const Color(0xFFB21F2D), // نفس اللون المائل للأحمر في الكود الأصلي
+        backgroundColor: const Color(0xFFB21F2D),
         elevation: 0,
       ),
       body: SingleChildScrollView(
@@ -49,11 +50,10 @@ class FinancialDashboard extends StatelessWidget {
                   const Text(
                     "لوحة التحكم المالية والمحاسبية",
                     style: TextStyle(
-                      fontFamily: 'Cairo', 
-                      fontSize: 22, 
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1F2937)
-                    ),
+                        fontFamily: 'Cairo',
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1F2937)),
                   ),
                   const SizedBox(height: 5),
                   Text(
@@ -69,13 +69,23 @@ class FinancialDashboard extends StatelessWidget {
             // شبكة الكروت (Grid of Cards)
             GridView.count(
               shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(), // لتمكين التمرير للصفحة بالكامل
+              physics: const NeverScrollableScrollPhysics(),
               crossAxisCount: crossAxisCount,
               crossAxisSpacing: 20,
               mainAxisSpacing: 20,
-              childAspectRatio: screenWidth > 800 ? 1.3 : 2.0, // ضبط نسبة الطول للعرض حسب الشاشة
+              childAspectRatio: screenWidth > 800 ? 1.3 : 2.0,
               children: [
-                _buildMenuCard(context, "إيرادات", Icons.monetization_on, const Color(0xFFF57C00)),
+                // ✅ ربط كرت الإيرادات بالصفحة الجديدة
+                _buildMenuCard(
+                  context, 
+                  "إيرادات", 
+                  Icons.monetization_on, 
+                  const Color(0xFFF57C00),
+                  onTap: () => Navigator.push(
+                    context, 
+                    MaterialPageRoute(builder: (context) => const FinancialSummaryScreen())
+                  ),
+                ),
                 _buildMenuCard(context, "فواتير", Icons.file_copy, const Color(0xFF1976D2)),
                 _buildMenuCard(context, "الحركة المالية", Icons.analytics, const Color(0xFF388E3C)),
                 _buildMenuCard(context, "الأرباح والخسائر", Icons.trending_up, const Color(0xFF7B1FA2)),
@@ -89,15 +99,13 @@ class FinancialDashboard extends StatelessWidget {
     );
   }
 
-  // ويدجت بناء الكرت الواحد
-  Widget _buildMenuCard(BuildContext context, String title, IconData icon, Color color) {
+  // ويدجت بناء الكرت الواحد مع إضافة خاصية الـ onTap اختيارياً
+  Widget _buildMenuCard(BuildContext context, String title, IconData icon, Color color, {VoidCallback? onTap}) {
     return InkWell(
-      onTap: () {
-        // سيتم ربط الصفحات الفرعية هنا عند برمجتها
+      onTap: onTap ?? () {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("جاري فتح $title...", 
-            style: const TextStyle(fontFamily: 'Cairo')),
+            content: Text("جاري فتح $title...", style: const TextStyle(fontFamily: 'Cairo')),
             backgroundColor: color,
           ),
         );
