@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 // إضافة الاستيراد لصفحة الكاش باك
-import 'cashback_management_screen.dart'; 
+import 'cashback_management_screen.dart';
+// 1. إضافة الاستيراد لصفحة البانرات الجديدة
+import 'smart_banners_management_screen.dart';
 
 class MarketingManagementScreen extends StatelessWidget {
   const MarketingManagementScreen({super.key});
@@ -51,7 +53,6 @@ class MarketingManagementScreen extends StatelessWidget {
                     icon: Icons.percent,
                     color: Colors.redAccent,
                     onTap: () {
-                      // تم تفعيل الربط هنا
                       Navigator.push(
                         context,
                         MaterialPageRoute(builder: (context) => const CashbackManagementScreen()),
@@ -64,7 +65,13 @@ class MarketingManagementScreen extends StatelessWidget {
                     subtitle: "تغيير صور العروض الرئيسية",
                     icon: Icons.view_carousel,
                     color: Colors.blueAccent,
-                    onTap: () {},
+                    onTap: () {
+                      // 2. تفعيل الربط بصفحة البانرات الذكية
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const SmartBannersManagementScreen()),
+                      );
+                    },
                   ),
                   _buildMarketingCard(
                     context,
