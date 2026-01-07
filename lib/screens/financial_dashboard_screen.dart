@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'Financial/financial_summary_screen.dart'; // ✅ الاستيراد الصحيح للمسار الجديد
+import 'Financial/financial_summary_screen.dart'; // ✅ مسار صفحة الإيرادات
+import 'Financial/invoices_management_screen.dart'; // ✅ مسار صفحة الفواتير الجديد
 
 class FinancialDashboard extends StatelessWidget {
   const FinancialDashboard({super.key});
@@ -75,7 +76,7 @@ class FinancialDashboard extends StatelessWidget {
               mainAxisSpacing: 20,
               childAspectRatio: screenWidth > 800 ? 1.3 : 2.0,
               children: [
-                // ✅ ربط كرت الإيرادات بالصفحة الجديدة
+                // 1. كرت الإيرادات
                 _buildMenuCard(
                   context, 
                   "إيرادات", 
@@ -86,7 +87,20 @@ class FinancialDashboard extends StatelessWidget {
                     MaterialPageRoute(builder: (context) => const FinancialSummaryScreen())
                   ),
                 ),
-                _buildMenuCard(context, "فواتير", Icons.file_copy, const Color(0xFF1976D2)),
+
+                // 2. كرت الفواتير (تم الربط الآن)
+                _buildMenuCard(
+                  context, 
+                  "فواتير", 
+                  Icons.file_copy, 
+                  const Color(0xFF1976D2),
+                  onTap: () => Navigator.push(
+                    context, 
+                    MaterialPageRoute(builder: (context) => const InvoicesManagementScreen())
+                  ),
+                ),
+
+                // بقية الكروت (سيتم ربطها لاحقاً)
                 _buildMenuCard(context, "الحركة المالية", Icons.analytics, const Color(0xFF388E3C)),
                 _buildMenuCard(context, "الأرباح والخسائر", Icons.trending_up, const Color(0xFF7B1FA2)),
                 _buildMenuCard(context, "إعدادات الحسابات", Icons.settings_applications, Colors.blueGrey),
@@ -99,7 +113,7 @@ class FinancialDashboard extends StatelessWidget {
     );
   }
 
-  // ويدجت بناء الكرت الواحد مع إضافة خاصية الـ onTap اختيارياً
+  // ويدجت بناء الكرت الواحد
   Widget _buildMenuCard(BuildContext context, String title, IconData icon, Color color, {VoidCallback? onTap}) {
     return InkWell(
       onTap: onTap ?? () {
