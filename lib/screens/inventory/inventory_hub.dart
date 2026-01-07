@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'tabs/purchase_invoice_screen.dart'; 
-import 'tabs/inventory_stock_tab.dart'; // ✅ إضافة الاستيراد لتبويب المخزن
+import 'tabs/purchase_invoice_screen.dart';
+import 'tabs/inventory_stock_tab.dart';
+import 'tabs/store_offers_tab.dart'; // ✅ إضافة استيراد تبويب المتجر
 
 class InventoryHub extends StatefulWidget {
   const InventoryHub({super.key});
@@ -43,28 +44,15 @@ class _InventoryHubState extends State<InventoryHub> with SingleTickerProviderSt
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
+        children: const [
           // 1. تبويب تسجيل فواتير المشتريات
-          const PurchaseInvoiceScreen(), 
+          PurchaseInvoiceScreen(), 
           
-          // 2. ✅ تم الربط: تبويب عرض رصيد المخزن الفعلي
-          const InventoryStockTab(), 
+          // 2. تبويب عرض رصيد المخزن الرئيسي
+          InventoryStockTab(), 
           
-          // 3. تبويب جرد المتجر (لا يزال قيد الإنشاء)
-          _buildPlaceholder("صفحة جرد رفوف المتجر (قيد التطوير)"),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPlaceholder(String title) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.construction, size: 50, color: Colors.grey),
-          const SizedBox(height: 10),
-          Text(title, style: const TextStyle(fontFamily: 'Cairo', fontSize: 16)),
+          // 3. ✅ تم الربط: تبويب عرض رصيد المتجر (العروض)
+          StoreOffersTab(),
         ],
       ),
     );
