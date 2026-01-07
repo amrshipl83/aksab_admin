@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-// إضافة الاستيراد لصفحة الكاش باك
 import 'cashback_management_screen.dart';
-// إضافة الاستيراد لصفحة البانرات الجديدة
 import 'smart_banners_management_screen.dart';
-// ✅ إضافة الاستيراد لصفحة نظام النقاط الجديدة
 import 'points_settings_screen.dart';
+// ✅ الربط بملف الإشعارات الجديد
+import 'promo_notifications_screen.dart'; 
 
 class MarketingManagementScreen extends StatelessWidget {
   const MarketingManagementScreen({super.key});
@@ -83,7 +82,6 @@ class MarketingManagementScreen extends StatelessWidget {
                     icon: Icons.monetization_on,
                     color: Colors.amber,
                     onTap: () {
-                      // ✅ تم تفعيل الربط بصفحة إعدادات النقاط
                       Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -98,7 +96,12 @@ class MarketingManagementScreen extends StatelessWidget {
                     icon: Icons.notification_important,
                     color: Colors.deepPurple,
                     onTap: () {
-                      // سيتم ربطها لاحقاً
+                      // ✅ تم تفعيل الربط بصفحة الإشعارات الذكية
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const PromoNotificationsScreen()),
+                      );
                     },
                   ),
                   _buildMarketingCard(
