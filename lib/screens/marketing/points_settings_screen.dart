@@ -11,49 +11,75 @@ class PointsSettingsScreen extends StatefulWidget {
 class _PointsSettingsScreenState extends State<PointsSettingsScreen> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   
-  // المتحكمات للنصوص (Controllers)
+  // Controllers لضمان التعامل السليم مع الحقول الرقمية
   final TextEditingController _pointsReqCtrl = TextEditingController();
   final TextEditingController _cashEquivCtrl = TextEditingController();
   final TextEditingController _minPointsCtrl = TextEditingController();
 
   @override
+  void dispose() {
+    _pointsReqCtrl.dispose();
+    _cashEquivCtrl.dispose();
+    _minPointsCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF9FBFC),
       appBar: AppBar(
-        title: const Text('إعدادات نظام النقاط', style: TextStyle(fontFamily: 'Tajawal')),
+        title: const Text('إعدادات نظام النقاط', style: TextStyle(fontFamily: 'Cairo')),
         backgroundColor: const Color(0xFF4CAF50),
+        foregroundColor: Colors.white,
       ),
       body: StreamBuilder<DocumentSnapshot>(
         stream: _db.collection('appSettings').doc('points').snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.hasError) return const Center(child: Text("حدث خطأ ما"));
-          if (!snapshot.hasData || !snapshot.data!.exists) {
-            return const Center(child: Text("لا توجد بيانات، ابدأ بإضافة الإعدادات"));
+          if (snapshot.hasError) return const Center(child: Text("حدث خطأ في الاتصال"));
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
           }
 
-          var data = snapshot.data!.data() as Map<String, dynamic>;
-          var convRate = data['conversionRate'] ?? {};
-          
-          // تحديث الحقول إذا لم تكن قيد التعديل
-          _pointsReqCtrl.text = convRate['pointsRequired']?.toString() ?? '';
-          _cashEquivCtrl.text = convRate['cashEquivalent']?.toString() ?? '';
-          _minPointsCtrl.text = convRate['minPointsForRedemption']?.toString() ?? '';
+          // إذا كانت الوثيقة موجودة، نملأ الحقول مبدئياً
+          if (snapshot.hasData && snapshot.data!.exists) {
+            var data = snapshot.data!.data() as Map<String, dynamic>;
+            var convRate = data['conversionRate'] ?? {};
+            
+            // تحديث قيم النصوص فقط إذا كانت فارغة (حتى لا نقاطع كتابة المستخدم)
+            if (_pointsReqCtrl.text.isEmpty) _pointsReqCtrl.text = convRate['pointsRequired']?.toString() ?? '';
+            if (_cashEquivCtrl.text.isEmpty) _cashEquivCtrl.text = convRate['cashEquivalent']?.toString() ?? '';
+            if (_minPointsCtrl.text.isEmpty) _minPointsCtrl.text = convRate['minPointsForRedemption']?.toString() ?? '';
+          }
 
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildHeader(Icons.swap_horiz, "معدل تحويل النقاط"),
-                _buildConversionSection(),
+                _buildSectionHeader(Icons.auto_graph, "معدل التحويل الأساسي"),
+                _buildCardContainer([
+                  _buildInputField(_pointsReqCtrl, "عدد النقاط المطلوبة للاستبدال"),
+                  _buildInputField(_cashEquivCtrl, "المبلغ النقدي المقابل (جنيه)"),
+                  _buildInputField(_minPointsCtrl, "الحد الأدنى للنقاط لبدء الاستبدال"),
+                  const SizedBox(height: 15),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: _saveConversionRate,
+                      icon: const Icon(Icons.save),
+                      label: const Text("حفظ الإعدادات الأساسية"),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF4CAF50),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ]),
                 const SizedBox(height: 30),
-                
-                _buildHeader(Icons.Add_chart, "قواعد كسب النقاط"),
-                _buildDynamicList(data['earningRules'] ?? [], "قواعد كسب"),
-                
-                const SizedBox(height: 30),
-                _buildHeader(Icons.policy, "سياسة الاستبدال"),
-                _buildDynamicList(data['redemptionPolicies'] ?? [], "سياسات"),
+                _buildSectionHeader(Icons.rule, "قواعد كسب النقاط المضافة"),
+                _buildPlaceholderCard("سيتم عرض القواعد الديناميكية هنا قريباً"),
               ],
             ),
           );
@@ -62,81 +88,59 @@ class _PointsSettingsScreenState extends State<PointsSettingsScreen> {
     );
   }
 
-  // بخش بناء رؤوس الأقسام بنفس ستايل الـ CSS
-  Widget _buildHeader(IconData icon, String title) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, color: const Color(0xFFFFC107)),
-            const SizedBox(width: 10),
-            Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF388E3C))),
-          ],
-        ),
-        const Divider(thickness: 2),
-        const SizedBox(height: 15),
-      ],
-    );
-  }
-
-  // قسم معدل التحويل
-  Widget _buildConversionSection() {
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(15),
-        child: Column(
-          children: [
-            _buildTextField(_pointsReqCtrl, "عدد النقاط المطلوبة"),
-            _buildTextField(_cashEquivCtrl, "المبلغ النقدي المقابل"),
-            _buildTextField(_minPointsCtrl, "الحد الأدنى للاستبدال"),
-            const SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: _saveConversionRate,
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4CAF50)),
-              child: const Text("حفظ معدل التحويل", style: TextStyle(color: Colors.white)),
-            )
-          ],
-        ),
+  Widget _buildSectionHeader(IconData icon, String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.orange),
+          const SizedBox(width: 10),
+          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+        ],
       ),
     );
   }
 
-  Widget _buildTextField(TextEditingController ctrl, String label) {
+  Widget _buildCardContainer(List<Widget> children) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _buildInputField(TextEditingController ctrl, String label) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 15),
       child: TextField(
         controller: ctrl,
-        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(fontFamily: 'Cairo', fontSize: 14),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        ),
         keyboardType: TextInputType.number,
       ),
     );
   }
 
-  // قائمة العناصر الديناميكية (مثل القواعد والسياسات)
-  Widget _buildDynamicList(List items, String type) {
-    return Column(
-      children: [
-        ...items.map((item) => Card(
-          child: ListTile(
-            title: Text(item['name'] ?? item['text_ar'] ?? "بدون عنوان"),
-            subtitle: Text(item['type'] ?? "ترتيب: ${item['order']}"),
-            trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () {}),
-            leading: Icon(Icons.circle, size: 12, color: item['isActive'] == false ? Colors.red : Colors.green),
-          ),
-        )).toList(),
-        TextButton.icon(
-          onPressed: () {}, 
-          icon: const Icon(Icons.add), 
-          label: Text("إضافة $type جديدة")
-        ),
-      ],
+  Widget _buildPlaceholderCard(String text) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(30),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey[300]!, style: BorderStyle.solid),
+      ),
+      child: Center(child: Text(text, style: const TextStyle(color: Colors.grey, fontFamily: 'Cairo'))),
     );
   }
 
-  // دالة الحفظ
   Future<void> _saveConversionRate() async {
     try {
       await _db.collection('appSettings').doc('points').set({
@@ -146,9 +150,13 @@ class _PointsSettingsScreenState extends State<PointsSettingsScreen> {
           'minPointsForRedemption': double.tryParse(_minPointsCtrl.text) ?? 0,
         }
       }, SetOptions(merge: true));
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم الحفظ بنجاح")));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم تحديث البيانات بنجاح")));
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ: $e")));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ أثناء الحفظ: $e")));
+      }
     }
   }
 }
