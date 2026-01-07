@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'tabs/purchase_invoice_screen.dart'; // استيراد الصفحة الجديدة
+import 'tabs/purchase_invoice_screen.dart'; 
+import 'tabs/inventory_stock_tab.dart'; // ✅ إضافة الاستيراد لتبويب المخزن
 
 class InventoryHub extends StatefulWidget {
   const InventoryHub({super.key});
@@ -14,7 +15,6 @@ class _InventoryHubState extends State<InventoryHub> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    // طول القائمة 3 كما هو
     _tabController = TabController(length: 3, vsync: this);
   }
 
@@ -44,11 +44,14 @@ class _InventoryHubState extends State<InventoryHub> with SingleTickerProviderSt
       body: TabBarView(
         controller: _tabController,
         children: [
-          // ✅ تم الربط هنا: استبدال الـ Placeholder بالصفحة الحقيقية
+          // 1. تبويب تسجيل فواتير المشتريات
           const PurchaseInvoiceScreen(), 
           
-          _buildPlaceholder("صفحة جرد المخزن الرئيسي"),
-          _buildPlaceholder("صفحة جرد رفوف المتجر"),
+          // 2. ✅ تم الربط: تبويب عرض رصيد المخزن الفعلي
+          const InventoryStockTab(), 
+          
+          // 3. تبويب جرد المتجر (لا يزال قيد الإنشاء)
+          _buildPlaceholder("صفحة جرد رفوف المتجر (قيد التطوير)"),
         ],
       ),
     );
