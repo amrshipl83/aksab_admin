@@ -10,7 +10,7 @@ class PromoNotificationsScreen extends StatefulWidget {
 }
 
 class _PromoNotificationsScreenState extends State<PromoNotificationsScreen> {
-  // الروابط الخاصة بالـ API لديك
+  // الروابط الخاصة بالـ API
   final String TOPIC_API = 'https://tx85tvinb2.execute-api.us-east-1.amazonaws.com/V1/get_topic';
   final String SEND_API = 'https://o5d9ke4l82.execute-api.us-east-1.amazonaws.com/V1/m_nofiction';
 
@@ -86,7 +86,10 @@ class _PromoNotificationsScreenState extends State<PromoNotificationsScreen> {
 
   void _showSnackBar(String msg, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg, style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: color)
+      SnackBar(
+        content: Text(msg, style: const TextStyle(fontFamily: 'Cairo')), 
+        backgroundColor: color
+      )
     );
   }
 
@@ -182,13 +185,24 @@ class _PromoNotificationsScreenState extends State<PromoNotificationsScreen> {
     );
   }
 
+  // الدالة المصلحة التي سببت الخطأ السابق ✅
   InputDecoration _inputDecoration({String? hint}) => InputDecoration(
     hintText: hint,
     fillColor: const Color(0xFFF9F9F9),
     filled: true,
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0 borderSide: BorderSide(color: Colors.grey.shade300))),
-    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
     contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(color: Colors.grey.shade300),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(color: Colors.grey.shade300),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: const BorderSide(color: Colors.deepPurple, width: 2),
+    ),
   );
 
   Widget _buildLabel(String text) => Padding(
