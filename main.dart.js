@@ -8550,8 +8550,7 @@ aNh:function aNh(){},
 aNi:function aNi(a){this.a=a},
 aNg:function aNg(a,b){this.a=a
 this.b=b},
-aNp:function aNp(a,b){this.a=a
-this.b=b},
+aNp:function aNp(a){this.a=a},
 aNm:function aNm(a){this.a=a},
 aNn:function aNn(a){this.a=a},
 aNl:function aNl(a,b){this.a=a
@@ -51154,16 +51153,13 @@ o=r.y?q:r.gauO()
 s=A.eV(q,q,B.yp,q,q,q,q,q,q,q,q,q,q,q,q,q,q,q,q,q)
 n.push(A.cG(A.dz(!1,r.y?B.eA:B.abZ,q,q,q,q,q,q,o,q,s),50,1/0))
 return A.eP(new A.b5(B.bn,A.TG(q,A.bE(n,B.aT,B.p,B.u),r.d),q),2,q,new A.cm(p,B.o))},
-afB(){var s,r,q,p={}
-p.a="name"
-s=this.r
-if(s==="CATEGORY")r="mainCategory"
-else if(s==="SUB_CATEGORY")r="subCategories"
-else{p.a="fullname"
-r="sellers"}s=$.Y
-q=(s==null?$.Y=$.aO():s).aD("[DEFAULT]")
-A.at(q,$.aW(),!0)
-return A.cW(new A.aNp(p,this),A.b0(new A.aI(q)).aw(r).ck(),t.l)},
+afB(){var s,r,q=this.r
+if(q==="CATEGORY")s="mainCategory"
+else s=q==="SUB_CATEGORY"?"subCategory":"sellers"
+q=$.Y
+r=(q==null?$.Y=$.aO():q).aD("[DEFAULT]")
+A.at(r,$.aW(),!0)
+return A.cW(new A.aNp(this),A.b0(new A.aI(r)).aw(s).ck(),t.l)},
 afd(){var s,r=null,q=A.ts(B.fJ),p=A.cf(12),o=this.x
 if(o==null)o=B.KN
 else{s=A.cf(12)
@@ -51202,20 +51198,24 @@ A.aNp.prototype={
 $2(a,b){var s,r,q,p=b.b
 if(p==null)return B.cL
 if(p.gaW().length===0)return B.adH
-s=this.b
+s=this.a
 r=s.w
 p=p.gaW()
 q=A.V(p).i("X<1,ca<h>>")
-p=A.Z(new A.X(p,new A.aNm(this.a),q),q.i("ad.E"))
+p=A.Z(new A.X(p,new A.aNm(s),q),q.i("ad.E"))
 return A.f8(B.Ud,B.abm,!1,p,new A.aNn(s),new A.aNo(),r,t.N)},
 $S:11}
 A.aNm.prototype={
-$1(a){var s,r=null,q=a.cD(0)
-q.toString
-t.P.a(q)
-s=B.b.gT(a.b.b.a)
-q=q.h(0,this.a.a)
-return A.hv(A.a6(q==null?"\u0628\u062f\u0648\u0646 \u0627\u0633\u0645":q,r,r,r,r,r,r,r,r),s,t.N)},
+$1(a){var s,r,q,p=null,o=a.cD(0)
+o.toString
+t.P.a(o)
+if(this.a.r==="RETAILER"){s=o.h(0,"merchantName")
+if(s==null)s="\u0628\u062f\u0648\u0646 \u0627\u0633\u0645 \u062a\u062c\u0627\u0631\u064a"
+r=o.h(0,"additionalPhone")
+if(r==null)r=""
+q=r.length!==0?s+" ("+r+")":s}else{q=o.h(0,"name")
+if(q==null)q="\u0628\u062f\u0648\u0646 \u0627\u0633\u0645"}o=B.b.gT(a.b.b.a)
+return A.hv(A.a6(q,p,p,p,p,p,p,p,p),o,t.N)},
 $S:21}
 A.aNn.prototype={
 $1(a){var s=this.a
