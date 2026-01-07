@@ -14,15 +14,19 @@ class ConsumerBannersTab extends StatefulWidget {
 class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _linkController = TextEditingController();
   final TextEditingController _orderController = TextEditingController(text: "0");
 
-  String _targetAudience = 'general'; // الجمهور المستهدف
-  String? _selectedDealerId;
+  // الجمهور المستهدف (عام أو تاجر محدد)
+  String _targetAudience = 'general'; 
+  String? _selectedOwnerId;
+
+  // الوجهة الذكية (مثل البانر التاجر)
+  String _linkType = 'NONE';
+  String? _targetId;
+  
   XFile? _selectedImage;
   bool _isUploading = false;
 
-  // إعدادات Cloudinary المتطابقة مع الـ HTML
   final String cloudinaryUrl = 'https://api.cloudinary.com/v1_1/dgmmx6jbu/image/upload';
   final String uploadPreset = 'commerce';
 
@@ -55,13 +59,13 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
     try {
       String? imageUrl = await _uploadToCloudinary();
       if (imageUrl != null) {
-        // نفس الحقول المطلوبة في الـ HTML
         await FirebaseFirestore.instance.collection('consumerBanners').add({
           'name': _nameController.text,
           'imageUrl': imageUrl,
-          'link': _linkController.text,
+          'linkType': _linkType,
+          'targetId': _targetId ?? '',
           'targetAudience': _targetAudience,
-          'ownerId': _targetAudience == 'dealer' ? _selectedDealerId : '',
+          'ownerId': _targetAudience == 'dealer' ? _selectedOwnerId : '',
           'order': int.tryParse(_orderController.text) ?? 0,
           'status': 'active',
           'createdAt': FieldValue.serverTimestamp(),
@@ -79,12 +83,13 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
 
   void _resetForm() {
     _nameController.clear();
-    _linkController.clear();
     _orderController.text = "0";
     setState(() {
       _selectedImage = null;
       _targetAudience = 'general';
-      _selectedDealerId = null;
+      _selectedOwnerId = null;
+      _linkType = 'NONE';
+      _targetId = null;
     });
   }
 
@@ -126,24 +131,40 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
               const SizedBox(height: 15),
               _buildImagePicker(),
               const SizedBox(height: 15),
-              TextFormField(
-                controller: _linkController,
-                decoration: const InputDecoration(labelText: "رابط البانر (Link)", hintText: "الرابط القديم أو وجهة مخصصة", border: OutlineInputBorder()),
+              
+              // --- اختيار نوع الوجهة (نفس منطق التاجر) ---
+              DropdownButtonFormField<String>(
+                value: _linkType,
+                decoration: const InputDecoration(labelText: "نوع الوجهة (أين يذهب المستخدم؟)", border: OutlineInputBorder()),
+                items: const [
+                  DropdownMenuItem(value: 'NONE', child: Text("بدون وجهة (صورة فقط)")),
+                  DropdownMenuItem(value: 'CATEGORY', child: Text("فتح قسم رئيسي")),
+                  DropdownMenuItem(value: 'SUB_CATEGORY', child: Text("فتح قسم فرعي (منتجات)")),
+                  DropdownMenuItem(value: 'RETAILER', child: Text("فتح صفحة تاجر توصيل")),
+                ],
+                onChanged: (v) => setState(() { _linkType = v!; _targetId = null; }),
               ),
+              if (_linkType != 'NONE') ...[
+                const SizedBox(height: 15),
+                _buildTargetDropdown(), // الدالة التي تجلب البيانات بناءً على النوع
+              ],
+
               const SizedBox(height: 15),
+              // --- اختيار الجمهور المستهدف ---
               DropdownButtonFormField<String>(
                 value: _targetAudience,
                 decoration: const InputDecoration(labelText: "الجمهور المستهدف", border: OutlineInputBorder()),
                 items: const [
                   DropdownMenuItem(value: 'general', child: Text("عام (يظهر للجميع)")),
-                  DropdownMenuItem(value: 'dealer', child: Text("تاجر محدد")),
+                  DropdownMenuItem(value: 'dealer', child: Text("يظهر لتجار محددين")),
                 ],
-                onChanged: (v) => setState(() { _targetAudience = v!; _selectedDealerId = null; }),
+                onChanged: (v) => setState(() { _targetAudience = v!; _selectedOwnerId = null; }),
               ),
               if (_targetAudience == 'dealer') ...[
                 const SizedBox(height: 15),
-                _buildDealerDropdown(),
+                _buildDealerSelector(), // لاختيار التاجر الذي سيظهر له البانر
               ],
+
               const SizedBox(height: 15),
               TextFormField(
                 controller: _orderController,
@@ -169,23 +190,54 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
     );
   }
 
-  Widget _buildDealerDropdown() {
+  // دالة جلب الوجهات (أقسام، أقسام فرعية، تجار توصيل)
+  Widget _buildTargetDropdown() {
+    String collection;
+    if (_linkType == 'CATEGORY') {
+      collection = 'mainCategory';
+    } else if (_linkType == 'SUB_CATEGORY') {
+      collection = 'subCategory';
+    } else {
+      collection = 'deliverySupermarkets';
+    }
+
     return StreamBuilder<QuerySnapshot>(
-      // نستخدم هنا الكولكشن deliverySupermarkets التي تواصلنا بخصوصها مسبقاً
+      stream: FirebaseFirestore.instance.collection(collection).snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const LinearProgressIndicator();
+        return DropdownButtonFormField<String>(
+          value: _targetId,
+          hint: const Text("اختر الوجهة المحددة"),
+          decoration: const InputDecoration(border: OutlineInputBorder(), fillColor: Color(0xFFF0F7FF), filled: true),
+          items: snapshot.data!.docs.map((doc) {
+            Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+            String name = (_linkType == 'RETAILER') ? (data['supermarketName'] ?? 'بدون اسم') : (data['name'] ?? 'بدون اسم');
+            return DropdownMenuItem(value: doc.id, child: Text(name));
+          }).toList(),
+          onChanged: (v) => setState(() => _targetId = v),
+          validator: (v) => v == null ? "مطلوب" : null,
+        );
+      },
+    );
+  }
+
+  // دالة جلب التجار لتحديد الجمهور المستهدف
+  Widget _buildDealerSelector() {
+    return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('deliverySupermarkets').snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const LinearProgressIndicator();
         return DropdownButtonFormField<String>(
-          value: _selectedDealerId,
-          hint: const Text("اختر التاجر"),
-          decoration: const InputDecoration(border: OutlineInputBorder()),
+          value: _selectedOwnerId,
+          hint: const Text("اختر التاجر المستهدف"),
+          decoration: const InputDecoration(border: OutlineInputBorder(), fillColor: Color(0xFFFFF4F4), filled: true),
           items: snapshot.data!.docs.map((doc) {
             return DropdownMenuItem(
               value: doc.id,
               child: Text(doc.get('supermarketName') ?? 'بدون اسم'),
             );
           }).toList(),
-          onChanged: (v) => setState(() => _selectedDealerId = v),
+          onChanged: (v) => setState(() => _selectedOwnerId = v),
           validator: (v) => _targetAudience == 'dealer' && v == null ? "برجاء اختيار تاجر" : null,
         );
       },
@@ -225,7 +277,7 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
               child: ListTile(
                 leading: Image.network(data['imageUrl'], width: 50, height: 50, fit: BoxFit.cover),
                 title: Text(data['name'] ?? ''),
-                subtitle: Text("الوجهة: ${data['link']}"),
+                subtitle: Text("النوع: ${data['linkType']} - للجمهور: ${data['targetAudience']}"),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete, color: Colors.red),
                   onPressed: () => _deleteBanner(doc.id),
