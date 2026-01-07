@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 // إضافة الاستيراد لصفحة الكاش باك
 import 'cashback_management_screen.dart';
-// 1. إضافة الاستيراد لصفحة البانرات الجديدة
+// إضافة الاستيراد لصفحة البانرات الجديدة
 import 'smart_banners_management_screen.dart';
+// ✅ إضافة الاستيراد لصفحة نظام النقاط الجديدة
+import 'points_settings_screen.dart';
 
 class MarketingManagementScreen extends StatelessWidget {
   const MarketingManagementScreen({super.key});
@@ -55,7 +57,8 @@ class MarketingManagementScreen extends StatelessWidget {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => const CashbackManagementScreen()),
+                        MaterialPageRoute(
+                            builder: (context) => const CashbackManagementScreen()),
                       );
                     },
                   ),
@@ -66,10 +69,10 @@ class MarketingManagementScreen extends StatelessWidget {
                     icon: Icons.view_carousel,
                     color: Colors.blueAccent,
                     onTap: () {
-                      // 2. تفعيل الربط بصفحة البانرات الذكية
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => const SmartBannersManagementScreen()),
+                        MaterialPageRoute(
+                            builder: (context) => const SmartBannersManagementScreen()),
                       );
                     },
                   ),
@@ -79,7 +82,14 @@ class MarketingManagementScreen extends StatelessWidget {
                     subtitle: "إدارة نقاط المكافآت واستبدالها",
                     icon: Icons.monetization_on,
                     color: Colors.amber,
-                    onTap: () {},
+                    onTap: () {
+                      // ✅ تم تفعيل الربط بصفحة إعدادات النقاط
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const PointsSettingsScreen()),
+                      );
+                    },
                   ),
                   _buildMarketingCard(
                     context,
@@ -87,7 +97,9 @@ class MarketingManagementScreen extends StatelessWidget {
                     subtitle: "إرسال رسائل تنبيهية للعملاء",
                     icon: Icons.notification_important,
                     color: Colors.deepPurple,
-                    onTap: () {},
+                    onTap: () {
+                      // سيتم ربطها لاحقاً
+                    },
                   ),
                   _buildMarketingCard(
                     context,
@@ -95,7 +107,9 @@ class MarketingManagementScreen extends StatelessWidget {
                     subtitle: "تغذية بيانات الذكاء الاصطناعي",
                     icon: Icons.psychology,
                     color: Colors.teal,
-                    onTap: () {},
+                    onTap: () {
+                      // سيتم ربطها لاحقاً
+                    },
                   ),
                 ],
               ),
