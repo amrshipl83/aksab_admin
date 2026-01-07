@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 
 class PromoNotificationsScreen extends StatefulWidget {
@@ -10,9 +11,13 @@ class PromoNotificationsScreen extends StatefulWidget {
 }
 
 class _PromoNotificationsScreenState extends State<PromoNotificationsScreen> {
-  // الروابط الخاصة بالـ API
+  // الروابط الخاصة بالـ API لديك
   final String TOPIC_API = 'https://tx85tvinb2.execute-api.us-east-1.amazonaws.com/V1/get_topic';
   final String SEND_API = 'https://o5d9ke4l82.execute-api.us-east-1.amazonaws.com/V1/m_nofiction';
+
+  // إعدادات Cloudinary الخاصة بك
+  final String cloudName = "dgmmx6jbu"; 
+  final String uploadPreset = "commerce";
 
   final TextEditingController _titleCtrl = TextEditingController(text: "أكسب 💰");
   final TextEditingController _msgCtrl = TextEditingController();
@@ -23,6 +28,7 @@ class _PromoNotificationsScreenState extends State<PromoNotificationsScreen> {
   String _targetScreen = 'Home'; 
   List<String> _topics = [];
   bool _isLoading = false;
+  bool _isUploading = false;
 
   @override
   void initState() {
@@ -42,6 +48,40 @@ class _PromoNotificationsScreenState extends State<PromoNotificationsScreen> {
       }
     } catch (e) {
       debugPrint("Error fetching topics: $e");
+    }
+  }
+
+  // دالة اختيار ورفع الصورة لـ Cloudinary
+  Future<void> _pickAndUploadImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    
+    if (pickedFile != null) {
+      setState(() => _isUploading = true);
+      try {
+        final url = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/image/upload');
+        final bytes = await pickedFile.readAsBytes();
+        
+        final request = http.MultipartRequest('POST', url)
+          ..fields['upload_preset'] = uploadPreset
+          ..fields['folder'] = 'promoNotifications'
+          ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: pickedFile.name));
+
+        final response = await request.send();
+        if (response.statusCode == 200) {
+          final data = jsonDecode(await response.stream.bytesToString());
+          setState(() {
+            _imgUrlCtrl.text = data['secure_url']; // وضع الرابط تلقائياً
+          });
+          _showSnackBar("تم رفع الصورة بنجاح", Colors.green);
+        } else {
+          _showSnackBar("فشل رفع الصورة للسيرفر", Colors.red);
+        }
+      } catch (e) {
+        _showSnackBar("خطأ أثناء الرفع", Colors.red);
+      } finally {
+        setState(() => _isUploading = false);
+      }
     }
   }
 
@@ -86,10 +126,7 @@ class _PromoNotificationsScreenState extends State<PromoNotificationsScreen> {
 
   void _showSnackBar(String msg, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg, style: const TextStyle(fontFamily: 'Cairo')), 
-        backgroundColor: color
-      )
+      SnackBar(content: Text(msg, style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: color)
     );
   }
 
@@ -131,14 +168,37 @@ class _PromoNotificationsScreenState extends State<PromoNotificationsScreen> {
                   _buildLabel("نص الرسالة:"),
                   TextField(controller: _msgCtrl, maxLines: 3, decoration: _inputDecoration(hint: "اكتب رسالتك هنا...")),
                   const SizedBox(height: 15),
-                  _buildLabel("رابط الصورة (اختياري):"),
-                  TextField(controller: _imgUrlCtrl, decoration: _inputDecoration(hint: "https://...")),
+                  
+                  _buildLabel("صورة الإشعار:"),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _imgUrlCtrl, 
+                          decoration: _inputDecoration(hint: "رابط الصورة سيظهر هنا...")
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      ElevatedButton(
+                        onPressed: _isUploading ? null : _pickAndUploadImage,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueGrey,
+                          padding: const EdgeInsets.all(12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+                        ),
+                        child: _isUploading 
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Icon(Icons.cloud_upload, color: Colors.white),
+                      )
+                    ],
+                  ),
+                  
                   const SizedBox(height: 15),
                   _buildLabel("اختر النغمة المتكلمة:"),
                   DropdownButtonFormField<String>(
                     value: _selectedSound,
                     items: const [
-                      DropdownMenuItem(value: 'default', child: Text("النغمة الافتراضية")),
+                      DropdownMenuItem(value: 'default', child: Text("الافتراضية")),
                       DropdownMenuItem(value: 'order_new', child: Text("نغمة: طلب جديد")),
                       DropdownMenuItem(value: 'order_cancel', child: Text("نغمة: إلغاء طلب")),
                       DropdownMenuItem(value: 'promo_msg', child: Text("نغمة: عرض ترويجي")),
@@ -185,24 +245,14 @@ class _PromoNotificationsScreenState extends State<PromoNotificationsScreen> {
     );
   }
 
-  // الدالة المصلحة التي سببت الخطأ السابق ✅
   InputDecoration _inputDecoration({String? hint}) => InputDecoration(
     hintText: hint,
     fillColor: const Color(0xFFF9F9F9),
     filled: true,
     contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: Colors.grey.shade300),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: Colors.grey.shade300),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: Colors.deepPurple, width: 2),
-    ),
+    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
+    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Colors.deepPurple, width: 2)),
   );
 
   Widget _buildLabel(String text) => Padding(
