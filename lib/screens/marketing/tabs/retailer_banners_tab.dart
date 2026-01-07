@@ -164,15 +164,14 @@ class _RetailerBannersTabState extends State<RetailerBannersTab> {
 
   Widget _buildTargetDropdown() {
     String collection;
-    String field = 'name'; // معظم الأقسام تستخدم 'name'
-
+    
+    // تحديد المجموعة بناءً على الاختيار
     if (_linkType == 'CATEGORY') {
       collection = 'mainCategory';
     } else if (_linkType == 'SUB_CATEGORY') {
-      collection = 'subCategories'; // كولكشن الأقسام الفرعية
+      collection = 'subCategory'; // ✅ تم التعديل من صورتك
     } else {
-      collection = 'sellers';
-      field = 'fullname'; // التجار يستخدمون 'fullname'
+      collection = 'sellers'; // ✅ المجموعة الصحيحة كما في صورتك
     }
 
     return StreamBuilder<QuerySnapshot>(
@@ -187,9 +186,21 @@ class _RetailerBannersTabState extends State<RetailerBannersTab> {
           decoration: const InputDecoration(border: OutlineInputBorder(), fillColor: Color(0xFFF0F7FF), filled: true),
           items: snapshot.data!.docs.map((doc) {
             Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+            
+            String displayText = "";
+            if (_linkType == 'RETAILER') {
+              // ✅ جلب اسم التاجر مع الهاتف لمنع التشابه كما طلبت
+              String mName = data['merchantName'] ?? 'بدون اسم تجاري';
+              String phone = data['additionalPhone'] ?? '';
+              displayText = phone.isNotEmpty ? "$mName ($phone)" : mName;
+            } else {
+              // للأقسام الرئيسية والفرعية نستخدم حقل name
+              displayText = data['name'] ?? 'بدون اسم';
+            }
+
             return DropdownMenuItem(
               value: doc.id,
-              child: Text(data[field] ?? 'بدون اسم'),
+              child: Text(displayText),
             );
           }).toList(),
           onChanged: (v) => setState(() => _targetId = v),
