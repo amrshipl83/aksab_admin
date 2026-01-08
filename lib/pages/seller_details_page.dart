@@ -1,6 +1,8 @@
-// lib/pages/seller_details_page.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
 class SellerDetailsPage extends StatelessWidget {
   final String sellerId;
@@ -10,6 +12,37 @@ class SellerDetailsPage extends StatelessWidget {
 
   String _f(dynamic val) => (val == null || val.toString().isEmpty) ? "—" : val.toString();
 
+  // دالة تصدير PDF
+  Future<void> _exportToPdf(Map<String, dynamic> data) async {
+    final pdf = pw.Document();
+    
+    // ملاحظة: لتحسين اللغة العربية في PDF يفضل تحميل خط عربي، هنا نستخدم التنسيق الأساسي
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text("Seller Report: ${data['merchantName'] ?? data['fullname']}", style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
+              pw.Divider(),
+              pw.Text("Phone: ${data['phone']}"),
+              pw.Text("Address: ${data['address']}"),
+              pw.Text("Commission Rate: ${data['commissionRate']}%"),
+              pw.Text("Fixed Commission: ${data['fixedCommission']} EGP"),
+              pw.Text("Cashback Debt: ${data['cashbackAccruedDebt']} EGP"),
+              pw.Text("Min Order: ${data['minOrderTotal']} EGP"),
+              pw.SizedBox(height: 20),
+              pw.Text("Generated on: ${DateTime.now().toString()}"),
+            ],
+          );
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
+  }
+
   @override
   Widget build(BuildContext context) {
     double screenWidth = MediaQuery.of(context).size.width;
@@ -18,7 +51,6 @@ class SellerDetailsPage extends StatelessWidget {
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('sellers').doc(sellerId).snapshots(),
       builder: (context, snapshot) {
-        // نستخدم البيانات المباشرة من Firestore إذا توفرت، وإلا نستخدم البيانات الممررة
         final data = snapshot.hasData ? snapshot.data!.data() as Map<String, dynamic> : sellerData;
 
         return Scaffold(
@@ -27,6 +59,13 @@ class SellerDetailsPage extends StatelessWidget {
             title: Text(_f(data['merchantName'] ?? data['fullname']),
                 style: const TextStyle(fontFamily: 'Cairo', fontSize: 18)),
             backgroundColor: const Color(0xFF1F2937),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.picture_as_pdf, color: Colors.redAccent),
+                onPressed: () => _exportToPdf(data),
+                tooltip: "تصدير PDF",
+              ),
+            ],
           ),
           body: Center(
             child: Container(
@@ -38,8 +77,7 @@ class SellerDetailsPage extends StatelessWidget {
                     _buildHeader(data, isDesktop),
                     const SizedBox(height: 20),
                     
-                    // قسم العمولة المطور (نسبة + ثابت)
-                    _buildCommissionCard(data),
+                    _buildFinancialSummaryCard(data), // الكرت الجديد للحسابات المالية
                     const SizedBox(height: 16),
                     
                     if (isDesktop)
@@ -48,17 +86,17 @@ class SellerDetailsPage extends StatelessWidget {
                         children: [
                           Expanded(child: _buildOperationsCard(data)),
                           const SizedBox(width: 20),
-                          Expanded(child: _buildBankCard(data)),
+                          Expanded(child: _buildCommissionCard(data)),
                         ],
                       )
                     else ...[
                       _buildOperationsCard(data),
                       const SizedBox(height: 16),
-                      _buildBankCard(data),
+                      _buildCommissionCard(data),
                     ],
                     
                     const SizedBox(height: 16),
-                    _buildDocumentsCard(context, data), // عرض السجل والبطاقة الضريبية
+                    _buildDocumentsCard(context, data),
                     const SizedBox(height: 16),
                     _buildIdentityCard(data),
                   ],
@@ -71,16 +109,38 @@ class SellerDetailsPage extends StatelessWidget {
     );
   }
 
+  // كرت الحسابات المالية الجديد
+  Widget _buildFinancialSummaryCard(Map<String, dynamic> data) {
+    return _sectionCard("المؤشرات المالية المتقدمة", Icons.account_balance_wallet_outlined, Colors.blueGrey, [
+      Row(
+        children: [
+          Expanded(child: _staticRow("عمولة محققة", "${_f(data['realizedCommission'])} ج.م")),
+          const SizedBox(width: 10),
+          Expanded(child: _staticRow("عمولة معلقة", "${_f(data['unrealizedCommission'])} ج.م")),
+        ],
+      ),
+      const Divider(),
+      EditableInfoRow(label: "دين الكاش باك", value: _f(data['cashbackAccruedDebt']), field: "cashbackAccruedDebt", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
+      EditableInfoRow(label: "رصيد المنصة", value: _f(data['cashbackPlatformCredit']), field: "cashbackPlatformCredit", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
+    ]);
+  }
+
+  Widget _buildOperationsCard(Map<String, dynamic> data) {
+    return _sectionCard("التشغيل والتوصيل", Icons.local_shipping_outlined, Colors.purple, [
+      EditableInfoRow(label: "رسوم التوصيل", value: _f(data['deliveryFee']), field: "deliveryFee", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
+      EditableInfoRow(label: "أقل طلب", value: _f(data['minOrderTotal']), field: "minOrderTotal", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
+      const Divider(),
+      _staticRow("مناطق التوصيل", _f(data['deliveryAreas'])), // عرض مناطق التوصيل
+    ]);
+  }
+
+  // (بقية الدوال المساعدة _buildHeader, _buildCommissionCard, _buildDocumentsCard, _buildIdentityCard تبقى كما هي مع التأكد من استخدام الأسماء الصحيحة)
+
   Widget _buildHeader(Map<String, dynamic> data, bool isDesktop) {
-    // دعم كلا مفتاحي الشعار (القديم والجديد من Cloudinary)
     String? logo = data['logoUrl'] ?? data['merchantLogoUrl'];
-    
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-          color: Colors.white, 
-          borderRadius: BorderRadius.circular(16), 
-          border: Border.all(color: Colors.grey.shade200)),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
       child: Row(
         children: [
           CircleAvatar(
@@ -94,7 +154,7 @@ class SellerDetailsPage extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(_f(data['merchantName']), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                Text("نوع النشاط: ${_f(data['businessType'])}", style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+                Text("المسؤول: ${_f(data['fullname'])}", style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
                 _buildStatusChip(data['status']),
               ],
             ),
@@ -105,91 +165,29 @@ class SellerDetailsPage extends StatelessWidget {
   }
 
   Widget _buildCommissionCard(Map<String, dynamic> data) {
-    return _sectionCard("نظام العمولة المعتمد", Icons.monetization_on_outlined, Colors.green, [
-      _staticRow("نوع العمولة", _translateCommissionType(data['commissionType'])),
-      EditableInfoRow(label: "نسبة العمولة", value: _f(data['commissionRate']), field: "commissionRate", sellerId: sellerId, isNumber: true, suffix: " %"),
-      EditableInfoRow(label: "العمولة الثابتة", value: _f(data['fixedCommission']), field: "fixedCommission", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
+    return _sectionCard("إعدادات العمولة", Icons.percent, Colors.green, [
+      _staticRow("النوع", _translateCommissionType(data['commissionType'])),
+      EditableInfoRow(label: "النسبة", value: _f(data['commissionRate']), field: "commissionRate", sellerId: sellerId, isNumber: true, suffix: " %"),
+      EditableInfoRow(label: "المبلغ الثابت", value: _f(data['fixedCommission']), field: "fixedCommission", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
     ]);
   }
 
   Widget _buildDocumentsCard(BuildContext context, Map<String, dynamic> data) {
-    return _sectionCard("المستندات القانونية", Icons.description_outlined, Colors.redAccent, [
+    return _sectionCard("المستندات", Icons.folder_shared_outlined, Colors.redAccent, [
       _imageRow(context, "السجل التجاري", data['crUrl']),
-      const Divider(),
       _imageRow(context, "البطاقة الضريبية", data['tcUrl']),
     ]);
   }
 
-  // --- دوال مساعدة للواجهة ---
-
-  Widget _buildStatusChip(String? status) {
-    bool isActive = status == 'active';
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: isActive ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(isActive ? "حساب نشط" : "تحت المراجعة", 
-          style: TextStyle(color: isActive ? Colors.green : Colors.orange, fontSize: 12, fontWeight: FontWeight.bold)),
-    );
-  }
-
-  String _translateCommissionType(dynamic type) {
-    if (type == "percentage") return "نسبة مئوية";
-    if (type == "fixed") return "مبلغ ثابت";
-    if (type == "both") return "نسبة + مبلغ ثابت";
-    return "غير محدد";
-  }
-
-  Widget _imageRow(BuildContext context, String label, String? url) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-          url != null && url.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.image_search, color: Colors.blue),
-                  onPressed: () => _showFullImage(context, url),
-                )
-              : const Text("غير مرفق", style: TextStyle(color: Colors.red, fontSize: 12)),
-        ],
-      ),
-    );
-  }
-
-  void _showFullImage(BuildContext context, String url) {
-    showDialog(context: context, builder: (_) => Dialog(child: Image.network(url)));
-  }
-
-  // (بقية الدوال _sectionCard, _staticRow, _buildOperationsCard, _buildBankCard, _buildIdentityCard تبقى كما هي)
-  
-  Widget _buildOperationsCard(Map<String, dynamic> data) {
-    return _sectionCard("التشغيل والتوصيل", Icons.local_shipping_outlined, Colors.purple, [
-      EditableInfoRow(label: "رسوم التوصيل", value: _f(data['deliveryFee']), field: "deliveryFee", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
-      EditableInfoRow(label: "أقل طلب", value: _f(data['minOrderTotal']), field: "minOrderTotal", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
-    ]);
-  }
-
-  Widget _buildBankCard(Map<String, dynamic> data) {
-    return _sectionCard("بيانات البنك", Icons.account_balance_outlined, Colors.blue, [
-      EditableInfoRow(label: "اسم البنك", value: _f(data['bankName']), field: "bankName", sellerId: sellerId),
-      EditableInfoRow(label: "رقم الحساب", value: _f(data['bankAccountNumber']), field: "bankAccountNumber", sellerId: sellerId),
-    ]);
-  }
-
   Widget _buildIdentityCard(Map<String, dynamic> data) {
-    return _sectionCard("الهوية والتواصل", Icons.badge_outlined, Colors.orange, [
+    return _sectionCard("بيانات التواصل", Icons.contact_phone_outlined, Colors.orange, [
       _staticRow("رقم الهاتف", _f(data['phone'])),
       _staticRow("هاتف إضافي", _f(data['additionalPhone'])),
       _staticRow("العنوان", _f(data['address'])),
-      _staticRow("البريد (Auth)", _f(data['email'])),
     ]);
   }
 
+  // الدوال المساعدة للرسم (UI Helpers)
   Widget _sectionCard(String title, IconData icon, Color color, List<Widget> children) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -207,13 +205,50 @@ class SellerDetailsPage extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+        const SizedBox(width: 10),
         Expanded(child: Text(value, textAlign: TextAlign.left, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
       ]),
     );
   }
+
+  Widget _imageRow(BuildContext context, String label, String? url) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          url != null && url.isNotEmpty
+              ? IconButton(icon: const Icon(Icons.remove_red_eye, color: Colors.blue), onPressed: () => _showFullImage(context, url))
+              : const Text("غير مرفق", style: TextStyle(color: Colors.red, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  void _showFullImage(BuildContext context, String url) {
+    showDialog(context: context, builder: (_) => Dialog(child: Image.network(url)));
+  }
+
+  String _translateCommissionType(dynamic type) {
+    if (type == "percentage") return "نسبة مئوية";
+    if (type == "fixed") return "مبلغ ثابت";
+    if (type == "both") return "نسبة + ثابت";
+    return "غير محدد";
+  }
+
+  Widget _buildStatusChip(String? status) {
+    bool isActive = status == 'active';
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(color: isActive ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+      child: Text(isActive ? "نشط" : "قيد المراجعة", style: TextStyle(color: isActive ? Colors.green : Colors.orange, fontSize: 12, fontWeight: FontWeight.bold)),
+    );
+  }
 }
 
-// (كلاس EditableInfoRow يبقى كما هو في كودك الأصلي لأنه يتعامل مع التحديثات بشكل جيد)
+// كلاس التعديل السريع (Inline Edit)
 class EditableInfoRow extends StatelessWidget {
   final String label;
   final String value;
@@ -222,15 +257,7 @@ class EditableInfoRow extends StatelessWidget {
   final bool isNumber;
   final String suffix;
 
-  const EditableInfoRow({
-    super.key,
-    required this.label,
-    required this.value,
-    required this.field,
-    required this.sellerId,
-    this.isNumber = false,
-    this.suffix = "",
-  });
+  const EditableInfoRow({super.key, required this.label, required this.value, required this.field, required this.sellerId, this.isNumber = false, this.suffix = ""});
 
   @override
   Widget build(BuildContext context) {
@@ -260,7 +287,7 @@ class EditableInfoRow extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text("تعديل $label", style: const TextStyle(fontFamily: 'Cairo', fontSize: 16)),
+        title: Text("تعديل $label"),
         content: TextField(
           controller: controller,
           keyboardType: isNumber ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
