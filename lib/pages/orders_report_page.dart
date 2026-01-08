@@ -22,7 +22,6 @@ class _OrdersReportPageState extends State<OrdersReportPage> {
     _fetchOrders();
   }
 
-  // جلب الطلبات من Firestore بترتيب التاريخ
   void _fetchOrders() {
     FirebaseFirestore.instance
         .collection('orders')
@@ -39,7 +38,6 @@ class _OrdersReportPageState extends State<OrdersReportPage> {
     });
   }
 
-  // منطق الفلترة (مثل الويب تماماً)
   void _applyFilter() {
     String query = _searchController.text.toLowerCase();
     setState(() {
@@ -52,7 +50,6 @@ class _OrdersReportPageState extends State<OrdersReportPage> {
     });
   }
 
-  // تحويل الحالة إلى نص عربي
   String _getStatusName(String? status) {
     switch (status) {
       case 'new-order': return 'طلب جديد';
@@ -64,7 +61,16 @@ class _OrdersReportPageState extends State<OrdersReportPage> {
     }
   }
 
-  // تصدير الطلبات إلى إكسل
+  // دالة مساعدة لترجمة حالة الكاش باك
+  String _translateCashbackStatus(String? status) {
+    switch (status) {
+      case 'confirmed': return 'مؤكد ✅';
+      case 'pending': return 'قيد الانتظار ⏳';
+      case 'cancelled': return 'ملغى ❌';
+      default: return status ?? '—';
+    }
+  }
+
   Future<void> _exportToExcel() async {
     var excel = Excel.createExcel();
     Sheet sheetObject = excel['Orders'];
@@ -74,6 +80,7 @@ class _OrdersReportPageState extends State<OrdersReportPage> {
       TextCellValue('المشتري'),
       TextCellValue('الهاتف'),
       TextCellValue('الإجمالي'),
+      TextCellValue('صافي الربح'),
       TextCellValue('الحالة'),
       TextCellValue('المنتجات'),
     ]);
@@ -81,19 +88,20 @@ class _OrdersReportPageState extends State<OrdersReportPage> {
     for (var doc in filteredOrders) {
       var data = doc.data() as Map<String, dynamic>;
       var items = (data['items'] as List?)?.map((i) => "${i['name']} (${i['quantity']})").join(' - ') ?? '';
-      
+
       sheetObject.appendRow([
-        TextCellValue(data['orderDate'] != null ? (data['orderDate'] as Timestamp).toDate().toString() : ''),
+        TextCellValue(_formatDate(data['orderDate'])),
         TextCellValue(data['buyer']?['name'] ?? ''),
         TextCellValue(data['buyer']?['phone'] ?? ''),
         TextCellValue(data['total']?.toString() ?? '0'),
+        TextCellValue(data['netTotal']?.toString() ?? '0'),
         TextCellValue(_getStatusName(data['status'])),
         TextCellValue(items),
       ]);
     }
 
     if (kIsWeb) {
-      excel.save(fileName: "Orders_Report.xlsx");
+      excel.save(fileName: "Orders_Detailed_Report.xlsx");
     }
   }
 
@@ -101,7 +109,7 @@ class _OrdersReportPageState extends State<OrdersReportPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("تقرير الطلبات"),
+        title: const Text("تقرير الطلبات التفصيلي", style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
         backgroundColor: const Color(0xFF2c3e50),
         centerTitle: true,
         actions: [
@@ -110,35 +118,26 @@ class _OrdersReportPageState extends State<OrdersReportPage> {
       ),
       body: Column(
         children: [
-          // منطقة البحث (تجاوب كامل)
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchController,
-                    textAlign: TextAlign.right,
-                    decoration: InputDecoration(
-                      hintText: "بحث باسم العميل أو الهاتف...",
-                      prefixIcon: const Icon(Icons.search),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    onChanged: (v) => _applyFilter(),
-                  ),
-                ),
-              ],
+            child: TextField(
+              controller: _searchController,
+              textAlign: TextAlign.right,
+              decoration: InputDecoration(
+                hintText: "بحث باسم العميل أو الهاتف...",
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              onChanged: (v) => _applyFilter(),
             ),
           ),
-
-          // عرض النتائج (تجاوب: جدول للويب وCards للموبايل أو جدول قابل للتمرير)
           Expanded(
             child: isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : filteredOrders.isEmpty
                     ? const Center(child: Text("لا توجد طلبات حالياً"))
                     : SingleChildScrollView(
-                        scrollDirection: Axis.horizontal, // لتوافق الجداول العريضة
+                        scrollDirection: Axis.horizontal,
                         child: SingleChildScrollView(
                           child: DataTable(
                             headingRowColor: MaterialStateProperty.all(Colors.grey[200]),
@@ -152,19 +151,10 @@ class _OrdersReportPageState extends State<OrdersReportPage> {
                             rows: filteredOrders.map((doc) {
                               var data = doc.data() as Map<String, dynamic>;
                               return DataRow(cells: [
-                                DataCell(Text(data['orderDate'] != null 
-                                    ? (data['orderDate'] as Timestamp).toDate().toString().substring(0, 16) 
-                                    : '-')),
+                                DataCell(Text(_formatDate(data['orderDate']).substring(0, 10))),
                                 DataCell(Text(data['buyer']?['name'] ?? 'غير معروف')),
                                 DataCell(Text("${data['total']} EGP")),
-                                DataCell(Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(5),
-                                  ),
-                                  child: Text(_getStatusName(data['status'])),
-                                )),
+                                DataCell(Text(_getStatusName(data['status']))),
                                 DataCell(ElevatedButton(
                                   onPressed: () => _showOrderDetails(doc.id, data),
                                   child: const Text("التفاصيل"),
@@ -180,29 +170,52 @@ class _OrdersReportPageState extends State<OrdersReportPage> {
     );
   }
 
-  // نافذة عرض التفاصيل (Modal)
   void _showOrderDetails(String orderId, Map<String, dynamic> data) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text("تفاصيل الطلب #$orderId", textAlign: TextAlign.center, style: const TextStyle(fontSize: 16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+        title: Text("تفاصيل الطلب المالية واللوجستية\n#$orderId", 
+          textAlign: TextAlign.center, 
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
         content: SizedBox(
-          width: 600, // أقصى عرض للكمبيوتر
+          width: 600,
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _detailRow("العميل:", data['buyer']?['name']),
+                _buildSectionHeader("👤 بيانات المشتري"),
+                _detailRow("الاسم:", data['buyer']?['name']),
                 _detailRow("الهاتف:", data['buyer']?['phone']),
                 _detailRow("العنوان:", data['buyer']?['address']),
+                
                 const Divider(),
-                const Text("المنتجات:", style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 10),
+                _buildSectionHeader("💰 البيانات المالية"),
+                _detailRow("إجمالي الطلب:", "${data['total'] ?? 0} ج.م"),
+                _detailRow("طريقة الدفع:", data['paymentMethod'] == 'cod' ? 'كاش' : 'محفظة'),
+                _detailRow("نسبة العموله (Snapshot):", "${data['commissionRateSnapshot'] ?? data['commissionRate'] ?? 0}%"),
+                _detailRow("الكاش باك المستحق:", "${data['cashbackAmount'] ?? 0} ج.م"),
+                _detailRow("حالة الكاش باك:", _translateCashbackStatus(data['cashbackStatus'])),
+                _detailRow("المبلغ المستحق للمورد:", "${data['finalAmountToSeller'] ?? 0} ج.م"),
+                _detailRow("صافي ربح المنصة (Net Total):", "${data['netTotal'] ?? 0} ج.م"),
+
+                const Divider(),
+                _buildSectionHeader("📅 التتبع الزمني"),
+                _detailRow("تاريخ الطلب:", _formatDate(data['orderDate'])),
+                _detailRow("تاريخ الشحن:", _formatDate(data['shippedDate'])),
+                _detailRow("تاريخ التسليم:", _formatDate(data['deliveryDate'])),
+                _detailRow("حالة الطلب:", _getStatusName(data['status'])),
+
+                const Divider(),
+                _buildSectionHeader("📦 المنتجات"),
                 ...((data['items'] as List? ?? []).map((item) => ListTile(
-                      leading: Image.network(item['imageUrl'] ?? '', width: 40, errorBuilder: (c, e, s) => const Icon(Icons.image)),
-                      title: Text(item['name'] ?? ''),
-                      subtitle: Text("الكمية: ${item['quantity']} | السعر: ${item['price']}"),
-                    ))),
+                  contentPadding: EdgeInsets.zero,
+                  leading: item['imageUrl'] != null 
+                    ? Image.network(item['imageUrl'], width: 40, height: 40, fit: BoxFit.cover, errorBuilder: (c, e, s) => const Icon(Icons.image))
+                    : const Icon(Icons.image),
+                  title: Text(item['name'] ?? '', style: const TextStyle(fontSize: 13)),
+                  subtitle: Text("الكمية: ${item['quantity']} | السعر: ${item['price']} ج.م", style: const TextStyle(fontSize: 11)),
+                ))),
               ],
             ),
           ),
@@ -214,11 +227,31 @@ class _OrdersReportPageState extends State<OrdersReportPage> {
     );
   }
 
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
+      child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey, fontSize: 14)),
+    );
+  }
+
   Widget _detailRow(String label, dynamic value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Text("$label ${value ?? 'غير محدد'}", textAlign: TextAlign.right),
+      padding: const EdgeInsets.symmetric(vertical: 3.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+          Text("${value ?? '—'}", style: const TextStyle(fontSize: 12)),
+        ],
+      ),
     );
+  }
+
+  String _formatDate(dynamic date) {
+    if (date is Timestamp) {
+      return date.toDate().toString().substring(0, 16);
+    }
+    return "—";
   }
 }
 
