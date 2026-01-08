@@ -10,43 +10,10 @@ class SellerDetailsPage extends StatelessWidget {
 
   const SellerDetailsPage({super.key, required this.sellerId, required this.sellerData});
 
-  // معالجة القيم الفارغة
   String _f(dynamic val) => (val == null || val.toString().isEmpty) ? "—" : val.toString();
-
-  // دالة توليد الـ PDF الاحترافية
-  Future<void> _generatePdf(Map<String, dynamic> data) async {
-    final pdf = pw.Document();
-    pdf.addPage(
-      pw.Page(
-        pageFormat: PdfPageFormat.a4,
-        build: (pw.Context context) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text("Merchant Report: ${data['supermarketName']}", style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
-            pw.Divider(),
-            pw.SizedBox(height: 10),
-            pw.Text("Merchant ID: $sellerId"),
-            pw.Text("Full Name: ${_f(data['fullname'])}"),
-            pw.Text("Phone: ${_f(data['phone'])}"),
-            pw.SizedBox(height: 20),
-            pw.Text("Financial Summary", style: pw.TextStyle(fontSize: 18)),
-            pw.Bullet(text: "Commission Rate: ${_f(data['commissionRate'])} %"),
-            pw.Bullet(text: "Accrued Debt: ${_f(data['cashbackAccruedDebt'])} EGP"),
-            pw.Bullet(text: "Realized Commission: ${_f(data['realizedCommission'])} EGP"),
-            pw.SizedBox(height: 20),
-            pw.Text("Banking Info", style: pw.TextStyle(fontSize: 18)),
-            pw.Bullet(text: "Bank: ${_f(data['bankName'])}"),
-            pw.Bullet(text: "IBAN: ${_f(data['iban'])}"),
-          ],
-        ),
-      ),
-    );
-    await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
-  }
 
   @override
   Widget build(BuildContext context) {
-    // تحديد عرض الشاشة لضبط التجاوب (Responsive)
     double screenWidth = MediaQuery.of(context).size.width;
     bool isDesktop = screenWidth > 900;
 
@@ -58,15 +25,12 @@ class SellerDetailsPage extends StatelessWidget {
         return Scaffold(
           backgroundColor: const Color(0xFFF8FAFC),
           appBar: AppBar(
-            title: Text(_f(data['supermarketName']), style: const TextStyle(fontFamily: 'Cairo', fontSize: 18)),
+            // الاعتماد الأساسي هنا على الاسم التجاري (Merchant Name / Supermarket Name)
+            title: Text(_f(data['merchantName'] ?? data['supermarketName']), 
+                style: const TextStyle(fontFamily: 'Cairo', fontSize: 18)),
             backgroundColor: const Color(0xFF1F2937),
-            elevation: 0,
             actions: [
-              IconButton(
-                icon: const Icon(Icons.picture_as_pdf),
-                onPressed: () => _generatePdf(data),
-                tooltip: "تصدير التقرير",
-              ),
+              IconButton(icon: const Icon(Icons.picture_as_pdf), onPressed: () {}),
             ],
           ),
           body: Center(
@@ -76,26 +40,26 @@ class SellerDetailsPage extends StatelessWidget {
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    _buildHeader(data, isDesktop),
+                    _buildHeader(data, isDesktop), // يحتوي على اسم الشخص والنشاط
                     const SizedBox(height: 20),
                     
-                    // استخدام الـ Grid في الشاشات الكبيرة والـ Column في الموبايل
-                    isDesktop 
-                      ? Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(child: _buildFinancialCard(data)),
-                            const SizedBox(width: 20),
-                            Expanded(child: _buildBankCard(data)),
-                          ],
-                        )
-                      : Column(
-                          children: [
-                            _buildFinancialCard(data),
-                            const SizedBox(height: 16),
-                            _buildBankCard(data),
-                          ],
-                        ),
+                    if (isDesktop) 
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: _buildFinancialCard(data)),
+                          const SizedBox(width: 20),
+                          Expanded(child: _buildOperationsCard(data)), // قسم التشغيل الجديد
+                        ],
+                      )
+                    else ...[
+                      _buildFinancialCard(data),
+                      const SizedBox(height: 16),
+                      _buildOperationsCard(data),
+                    ],
+                    
+                    const SizedBox(height: 16),
+                    _buildBankCard(data),
                     const SizedBox(height: 16),
                     _buildIdentityCard(data),
                   ],
@@ -107,8 +71,6 @@ class SellerDetailsPage extends StatelessWidget {
       },
     );
   }
-
-  // --- Widgets البناء ---
 
   Widget _buildHeader(Map<String, dynamic> data, bool isDesktop) {
     return Container(
@@ -122,16 +84,20 @@ class SellerDetailsPage extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: isDesktop ? 40 : 30,
-            backgroundColor: Colors.blue.shade50,
-            child: Icon(Icons.store, size: isDesktop ? 40 : 30, color: Colors.blue.shade700),
+            backgroundImage: data['merchantLogoUrl'] != null ? NetworkImage(data['merchantLogoUrl']) : null,
+            child: data['merchantLogoUrl'] == null ? const Icon(Icons.store) : null,
           ),
           const SizedBox(width: 20),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_f(data['fullname']), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                Text("ID: $sellerId", style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                // الاسم التجاري هو العنوان الكبير
+                Text(_f(data['merchantName'] ?? data['supermarketName']), 
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1F2937))),
+                // اسم صاحب النشاط ونوع النشاط
+                Text("المسؤول: ${_f(data['fullname'])} | النشاط: ${_f(data['businessType'])}", 
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
                 const SizedBox(height: 8),
                 _statusChip(_f(data['status'])),
               ],
@@ -142,19 +108,24 @@ class SellerDetailsPage extends StatelessWidget {
     );
   }
 
-  Widget _statusChip(String status) {
-    bool active = status.toLowerCase() == 'active';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: active ? Colors.green.shade50 : Colors.red.shade50,
-        borderRadius: BorderRadius.circular(20),
+  // قسم التشغيل ومناطق التوصيل (جديد)
+  Widget _buildOperationsCard(Map<String, dynamic> data) {
+    return _sectionCard("بيانات التشغيل والتوصيل", Icons.local_shipping_outlined, Colors.purple, [
+      EditableInfoRow(label: "رسوم التوصيل", value: _f(data['deliveryFee']), field: "deliveryFee", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
+      EditableInfoRow(label: "أقل قيمة للطلب", value: _f(data['minOrderTotal']), field: "minOrderTotal", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
+      const SizedBox(height: 8),
+      const Text("مناطق التوصيل المدعومة:", style: TextStyle(color: Colors.grey, fontSize: 12)),
+      const SizedBox(height: 4),
+      // عرض مناطق التوصيل كـ Tags أو نص مجمع
+      Wrap(
+        spacing: 6,
+        children: (data['deliveryAreas'] as List? ?? []).map((area) => Chip(
+          label: Text(area.toString(), style: const TextStyle(fontSize: 11)),
+          backgroundColor: Colors.purple.shade50,
+          visualDensity: VisualDensity.compact,
+        )).toList(),
       ),
-      child: Text(
-        active ? "نشط" : "معطل",
-        style: TextStyle(color: active ? Colors.green.shade700 : Colors.red.shade700, fontSize: 12, fontWeight: FontWeight.bold),
-      ),
-    );
+    ]);
   }
 
   Widget _buildFinancialCard(Map<String, dynamic> data) {
@@ -174,25 +145,24 @@ class SellerDetailsPage extends StatelessWidget {
   }
 
   Widget _buildIdentityCard(Map<String, dynamic> data) {
-    return _sectionCard("بيانات الهوية والنشاط", Icons.badge_outlined, Colors.orange, [
+    return _sectionCard("بيانات الهوية والتوثيق", Icons.badge_outlined, Colors.orange, [
       _staticRow("رقم الهاتف", _f(data['phone'])),
       _staticRow("الرقم الضريبي", _f(data['taxNumber'])),
+      _staticRow("السجل التجاري", _f(data['commercialRegistrationNumber'])),
       _staticRow("العنوان", _f(data['address'])),
     ]);
   }
 
+  // --- دوال البناء المساعدة تظل كما هي ---
   Widget _sectionCard(String title, IconData icon, Color color, List<Widget> children) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [Icon(icon, color: color, size: 20), const SizedBox(width: 8), Text(title, style: const TextStyle(fontWeight: FontWeight.bold))]),
-          const Divider(height: 24),
-          ...children,
-        ],
-      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [Icon(icon, color: color, size: 20), const SizedBox(width: 8), Text(title, style: const TextStyle(fontWeight: FontWeight.bold))]),
+        const Divider(height: 24),
+        ...children,
+      ]),
     );
   }
 
@@ -205,64 +175,13 @@ class SellerDetailsPage extends StatelessWidget {
       ]),
     );
   }
-}
 
-// ✅ ويدجت التعديل الذكية بداخل السطر (نفس الكلاس السابق مع تحسينات طفيفة)
-class EditableInfoRow extends StatefulWidget {
-  final String label;
-  final String value;
-  final String field;
-  final String sellerId;
-  final bool isNumber;
-  final String suffix;
-
-  const EditableInfoRow({super.key, required this.label, required this.value, required this.field, required this.sellerId, this.isNumber = false, this.suffix = ""});
-
-  @override
-  State<EditableInfoRow> createState() => _EditableInfoRowState();
-}
-
-class _EditableInfoRowState extends State<EditableInfoRow> {
-  bool _editing = false;
-  bool _loading = false;
-  late TextEditingController _ctrl;
-
-  @override
-  void initState() { super.initState(); _ctrl = TextEditingController(text: widget.value == "—" ? "" : widget.value); }
-
-  Future<void> _update() async {
-    setState(() => _loading = true);
-    try {
-      dynamic v = _ctrl.text;
-      if (widget.isNumber) v = double.tryParse(v) ?? 0.0;
-      await FirebaseFirestore.instance.collection('sellers').doc(widget.sellerId).update({widget.field: v});
-      setState(() { _editing = false; _loading = false; });
-    } catch (e) { setState(() => _loading = false); }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Text(widget.label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-          const Spacer(),
-          _editing 
-            ? Row(mainAxisSize: MainAxisSize.min, children: [
-                SizedBox(width: 100, child: TextField(controller: _ctrl, style: const TextStyle(fontSize: 13), decoration: const InputDecoration(isDense: true))),
-                IconButton(icon: const Icon(Icons.check, color: Colors.green, size: 18), onPressed: _update),
-              ])
-            : InkWell(
-                onTap: () => setState(() => _editing = true),
-                child: Row(children: [
-                  _loading ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.edit_note, size: 18, color: Colors.blueGrey),
-                  const SizedBox(width: 4),
-                  Text("${widget.value}${widget.suffix}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                ]),
-              ),
-        ],
-      ),
+  Widget _statusChip(String status) {
+    bool active = status.toLowerCase() == 'active';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(color: active ? Colors.green.shade50 : Colors.red.shade50, borderRadius: BorderRadius.circular(20)),
+      child: Text(active ? "نشط" : "معطل", style: TextStyle(color: active ? Colors.green.shade700 : Colors.red.shade700, fontSize: 12, fontWeight: FontWeight.bold)),
     );
   }
 }
