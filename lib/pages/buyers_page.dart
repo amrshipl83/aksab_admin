@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:html' as html; // مكتبة التعامل مع المتصفح للتحميل
+import 'dart:convert';
+// لتجنب التحذير (Warning) يفضل استخدام 'package:web/web.dart' في المستقبل
+// ولكن حالياً سنبقي على الحل المتوافق مع المتصفح للتحميل
+import 'dart:html' as html; 
 
 class BuyersPage extends StatefulWidget {
   const BuyersPage({super.key});
@@ -12,7 +15,7 @@ class BuyersPage extends StatefulWidget {
 class _BuyersPageState extends State<BuyersPage> {
   String _searchQuery = "";
   Map<String, double> _customerPurchases = {};
-  List<QueryDocumentSnapshot> _allDocs = []; // لتخزين البيانات من أجل التصدير
+  List<QueryDocumentSnapshot> _allDocs = [];
 
   @override
   void initState() {
@@ -20,7 +23,7 @@ class _BuyersPageState extends State<BuyersPage> {
     _calculateTotalPurchases();
   }
 
-  // حساب إجمالي مشتريات كل عميل من مجموعة orders
+  // حساب إجمالي المشتريات
   Future<void> _calculateTotalPurchases() async {
     try {
       final ordersSnapshot = await FirebaseFirestore.instance.collection("orders").get();
@@ -37,23 +40,17 @@ class _BuyersPageState extends State<BuyersPage> {
         }
       }
 
-      if (mounted) {
-        setState(() {
-          _customerPurchases = purchasesMap;
-        });
-      }
+      if (mounted) setState(() => _customerPurchases = purchasesMap);
     } catch (e) {
       debugPrint("Error calculating purchases: $e");
     }
   }
 
-  // دالة تصدير البيانات إلى ملف CSV متوافق مع Excel
+  // تصدير البيانات لـ Excel (CSV)
   void _exportToExcel() {
     if (_allDocs.isEmpty) return;
-
-    // إضافة BOM لضمان ظهور اللغة العربية بشكل صحيح في Excel
-    String csvData = "\uFEFF";
-    csvData += "اسم العميل,الهاتف,البريد الإلكتروني,العنوان,إجمالي المشتريات,الحالة\n";
+    String csvData = "\uFEFF"; // BOM لدعم العربية
+    csvData += "اسم العميل,الهاتف,البريد الإلكتروني,العنوان,الكاش باك,إجمالي المشتريات,الحالة\n";
 
     for (var doc in _allDocs) {
       final data = doc.data() as Map<String, dynamic>;
@@ -61,17 +58,21 @@ class _BuyersPageState extends State<BuyersPage> {
       final name = data['fullname'] ?? "غير معروف";
       final phone = data['phone'] ?? "غير متاح";
       final email = data['email'] ?? "غير متاح";
-      final address = (data['address'] ?? "غير متاح").toString().replaceAll(',', '-'); // تنظيف الفواصل
+      final address = (data['address'] ?? "غير متاح").toString().replaceAll(',', '-');
+      final cashback = data['cashback'] ?? 0;
       final totalSpent = _customerPurchases[id] ?? 0.0;
       final status = data['status'] ?? "نشط";
 
-      csvData += "$name,$phone,$email,$address,${totalSpent.toStringAsFixed(2)},$status\n";
+      csvData += "$name,$phone,$email,$address,$cashback,${totalSpent.toStringAsFixed(2)},$status\n";
     }
 
-    final bytes = Uri.encodeComponent(csvData);
-    html.AnchorElement(href: "data:text/csv;charset=utf-8,$bytes")
-      ..setAttribute("download", "customers_report_${DateTime.now().day}_${DateTime.now().month}.csv")
+    final bytes = utf8.encode(csvData);
+    final blob = html.Blob([bytes], 'text/csv');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    html.AnchorElement(href: url)
+      ..setAttribute("download", "customers_report_${DateTime.now().millisecondsSinceEpoch}.csv")
       ..click();
+    html.Url.revokeObjectUrl(url);
   }
 
   @override
@@ -123,8 +124,7 @@ class _BuyersPageState extends State<BuyersPage> {
         if (snapshot.hasError) return const Center(child: Text("حدث خطأ في جلب البيانات"));
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
 
-        _allDocs = snapshot.data!.docs; // حفظ البيانات لغرض التصدير
-
+        _allDocs = snapshot.data!.docs;
         final filteredDocs = _allDocs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
           final name = (data['fullname'] ?? "").toString().toLowerCase();
@@ -150,38 +150,39 @@ class _BuyersPageState extends State<BuyersPage> {
   Widget _buildCustomerCard(String id, Map<String, dynamic> customer) {
     final totalSpent = _customerPurchases[id] ?? 0.0;
     final status = customer['status'] ?? 'active';
-    
+
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       margin: const EdgeInsets.only(bottom: 15),
-      elevation: 3,
+      elevation: 2,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
             Row(
               children: [
-                Expanded(
-                  child: Text(customer['fullname'] ?? "اسم غير متاح", 
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, fontFamily: 'Tajawal')),
-                ),
+                CircleAvatar(backgroundColor: Colors.blueGrey[100], child: Text(customer['fullname']?[0] ?? "U")),
+                const SizedBox(width: 12),
+                Expanded(child: Text(customer['fullname'] ?? "اسم غير متاح", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
                 _buildStatusBadge(status),
               ],
             ),
             const Divider(height: 25),
-            _infoRow(Icons.phone, customer['phone'] ?? "لا يوجد هاتف", Colors.blue),
-            const SizedBox(height: 8),
-            _infoRow(Icons.shopping_bag, "مشتريات: ${totalSpent.toStringAsFixed(2)} ج.م", Colors.green),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _infoChip(Icons.phone, customer['phone'] ?? "—", Colors.blue),
+                _infoChip(Icons.account_balance_wallet, "${customer['cashback'] ?? 0} ج.م", Colors.orange),
+                _infoChip(Icons.shopping_cart, "${totalSpent.toStringAsFixed(0)} ج.م", Colors.green),
+              ],
+            ),
             const SizedBox(height: 15),
             SizedBox(
               width: double.infinity,
-              child: OutlinedButton(
+              child: ElevatedButton(
                 onPressed: () => _showDetails(id, customer),
-                style: OutlinedButton.styleFrom(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  side: const BorderSide(color: Color(0xFF1F2937)),
-                ),
-                child: const Text("عرض كامل البيانات", style: TextStyle(color: Color(0xFF1F2937))),
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1F2937), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                child: const Text("التفاصيل وإرسال إشعار", style: TextStyle(color: Colors.white)),
               ),
             )
           ],
@@ -190,78 +191,104 @@ class _BuyersPageState extends State<BuyersPage> {
     );
   }
 
-  Widget _infoRow(IconData icon, String text, Color color) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: color),
-        const SizedBox(width: 10),
-        Text(text, style: const TextStyle(fontSize: 14)),
-      ],
-    );
+  Widget _infoChip(IconData icon, String text, Color color) {
+    return Row(children: [Icon(icon, size: 14, color: color), const SizedBox(width: 4), Text(text, style: const TextStyle(fontSize: 12))]);
   }
 
-  Widget _buildStatusBadge(String status) {
-    Color color = Colors.green;
-    String text = "نشط";
-    if (status == 'inactive') { color = Colors.grey; text = "معطل"; }
-    else if (status == 'vip') { color = Colors.orange; text = "VIP"; }
-    else if (status == 'new') { color = Colors.blue; text = "جديد"; }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(20)),
-      child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-    );
-  }
-
+  // --- المنبثقة المطورة ---
   void _showDetails(String id, Map<String, dynamic> customer) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
       builder: (context) => Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Center(child: Text("تفاصيل العميل", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
-            const SizedBox(height: 20),
+            const Center(child: Text("بيانات العميل التفصيلية", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+            const Divider(height: 30),
+            _detailItem("الرقم التعريفي (UID):", id),
             _detailItem("الاسم:", customer['fullname']),
-            _detailItem("البريد:", customer['email']),
             _detailItem("الهاتف:", customer['phone']),
             _detailItem("العنوان:", customer['address']),
+            _detailItem("الكاش باك الحالي:", "${customer['cashback'] ?? 0} ج.م"),
+            _detailItem("المندوب المسجل:", customer['repName'] ?? "تسجيل ذاتي"),
             _detailItem("تاريخ التسجيل:", _formatDate(customer['createdAt'])),
             const SizedBox(height: 20),
+            
+            // زر إرسال الإشعار (Notification via ARN)
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: customer['status'] == 'inactive' ? Colors.green : Colors.red,
-                ),
-                onPressed: () => _toggleStatus(id, customer['status']),
-                child: Text(customer['status'] == 'inactive' ? "تنشيط الحساب" : "تعطيل الحساب", 
-                  style: const TextStyle(color: Colors.white)),
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.notifications_active),
+                label: const Text("إرسال إشعار خاص (Push Notification)"),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.amber[800], foregroundColor: Colors.white),
+                onPressed: () => _sendNotificationDialog(customer),
               ),
             ),
             const SizedBox(height: 10),
+            
+            // زر تغيير الحالة
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(foregroundColor: customer['status'] == 'inactive' ? Colors.green : Colors.red),
+                onPressed: () => _toggleStatus(id, customer['status']),
+                child: Text(customer['status'] == 'inactive' ? "تنشيط الحساب" : "تعطيل الحساب"),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _detailItem(String label, dynamic value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: RichText(
-        text: TextSpan(
-          style: const TextStyle(color: Colors.black, fontSize: 15),
+  // دالة إرسال الإشعار (هنا تربطها بـ AWS SNS / ARN)
+  void _sendNotificationDialog(Map<String, dynamic> customer) {
+    final titleCtrl = TextEditingController(text: "أهلاً ${customer['fullname']}");
+    final bodyCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("إرسال إشعار عبر ARN"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            TextSpan(text: "$label ", style: const TextStyle(fontWeight: FontWeight.bold)),
-            TextSpan(text: "${value ?? 'غير متاح'}"),
+            TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: "عنوان الإشعار")),
+            TextField(controller: bodyCtrl, decoration: const InputDecoration(labelText: "نص الرسالة")),
+            const SizedBox(height: 10),
+            Text("Target ARN: ${customer['fcmToken'] != null ? 'متوفر' : 'غير متوفر'}", style: const TextStyle(fontSize: 10, color: Colors.grey)),
           ],
         ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("إلغاء")),
+          ElevatedButton(
+            onPressed: () async {
+              // منطق الإرسال الخاص بك هنا
+              // عادة يتم استدعاء Cloud Function ترسل لـ AWS SNS باستخدام الـ Token/ARN
+              debugPrint("Sending to ARN: ${customer['fcmToken']}");
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("جاري معالجة إرسال الإشعار...")));
+            },
+            child: const Text("إرسال الآن"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailItem(String label, dynamic value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          const SizedBox(width: 10),
+          Expanded(child: Text("${value ?? 'غير متوفر'}", style: const TextStyle(fontSize: 13))),
+        ],
       ),
     );
   }
@@ -278,6 +305,16 @@ class _BuyersPageState extends State<BuyersPage> {
     final newStatus = (currentStatus == 'inactive') ? 'active' : 'inactive';
     await FirebaseFirestore.instance.collection("users").doc(id).update({'status': newStatus});
     if (mounted) Navigator.pop(context);
+  }
+
+  Widget _buildStatusBadge(String status) {
+    Color color = Colors.green;
+    if (status == 'inactive') color = Colors.grey;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(10)),
+      child: Text(status == 'inactive' ? "معطل" : "نشط", style: const TextStyle(color: Colors.white, fontSize: 10)),
+    );
   }
 }
 
