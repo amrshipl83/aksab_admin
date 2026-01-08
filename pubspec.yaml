@@ -45,6 +45,8 @@ dependencies:
   cross_file: ^0.3.5+1
   rxdart: ^0.28.0
   intl: ^0.20.2
+  pdf: ^3.11.3
+  printing: ^5.14.2
 
 dev_dependencies:
   flutter_test:

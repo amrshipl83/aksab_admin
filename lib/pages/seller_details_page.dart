@@ -1,143 +1,213 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 
-class SellerDetailsPage extends StatefulWidget {
+class SellerDetailsPage extends StatelessWidget {
   final String sellerId;
   final Map<String, dynamic> sellerData;
 
   const SellerDetailsPage({super.key, required this.sellerId, required this.sellerData});
 
-  @override
-  State<SellerDetailsPage> createState() => _SellerDetailsPageState();
-}
-
-class _SellerDetailsPageState extends State<SellerDetailsPage> {
-  // دالة الحماية من البيانات الفارغة
+  // معالجة القيم الفارغة
   String _f(dynamic val) => (val == null || val.toString().isEmpty) ? "—" : val.toString();
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F7F6),
-      appBar: AppBar(
-        title: Text(widget.sellerData['supermarketName'] ?? "تفاصيل التاجر"),
-        backgroundColor: const Color(0xFF1F2937),
-        elevation: 0,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+  // دالة توليد الـ PDF الاحترافية
+  Future<void> _generatePdf(Map<String, dynamic> data) async {
+    final pdf = pw.Document();
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        build: (pw.Context context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
-            _buildHeader(),
-            const SizedBox(height: 20),
-            
-            // قسم الحسابات المالية
-            _buildSection("المؤشرات المالية", Icons.monetization_on, [
-              EditableInfoRow(
-                label: "نسبة العمولة",
-                value: _f(widget.sellerData['commissionRate']),
-                field: "commissionRate",
-                sellerId: widget.sellerId,
-                isNumber: true,
-                suffix: " %",
-              ),
-              EditableInfoRow(
-                label: "مديونية الكاش باك",
-                value: _f(widget.sellerData['cashbackAccruedDebt']),
-                field: "cashbackAccruedDebt",
-                sellerId: widget.sellerId,
-                isNumber: true,
-                suffix: " ج.م",
-              ),
-            ], color: Colors.green),
-
-            // قسم البيانات البنكية
-            _buildSection("بيانات التحويل البنكي", Icons.account_balance, [
-              EditableInfoRow(
-                label: "اسم البنك",
-                value: _f(widget.sellerData['bankName']),
-                field: "bankName",
-                sellerId: widget.sellerId,
-              ),
-              EditableInfoRow(
-                label: "رقم الحساب",
-                value: _f(widget.sellerData['bankAccountNumber']),
-                field: "bankAccountNumber",
-                sellerId: widget.sellerId,
-              ),
-              EditableInfoRow(
-                label: "رقم الـ IBAN",
-                value: _f(widget.sellerData['iban']),
-                field: "iban",
-                sellerId: widget.sellerId,
-              ),
-            ], color: Colors.blue),
-
-            // قسم التشغيل
-            _buildSection("إعدادات التشغيل", Icons.delivery_dining, [
-              EditableInfoRow(
-                label: "رسوم التوصيل",
-                value: _f(widget.sellerData['deliveryFee']),
-                field: "deliveryFee",
-                sellerId: widget.sellerId,
-                isNumber: true,
-              ),
-            ], color: Colors.purple),
+            pw.Text("Merchant Report: ${data['supermarketName']}", style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
+            pw.Divider(),
+            pw.SizedBox(height: 10),
+            pw.Text("Merchant ID: $sellerId"),
+            pw.Text("Full Name: ${_f(data['fullname'])}"),
+            pw.Text("Phone: ${_f(data['phone'])}"),
+            pw.SizedBox(height: 20),
+            pw.Text("Financial Summary", style: pw.TextStyle(fontSize: 18)),
+            pw.Bullet(text: "Commission Rate: ${_f(data['commissionRate'])} %"),
+            pw.Bullet(text: "Accrued Debt: ${_f(data['cashbackAccruedDebt'])} EGP"),
+            pw.Bullet(text: "Realized Commission: ${_f(data['realizedCommission'])} EGP"),
+            pw.SizedBox(height: 20),
+            pw.Text("Banking Info", style: pw.TextStyle(fontSize: 18)),
+            pw.Bullet(text: "Bank: ${_f(data['bankName'])}"),
+            pw.Bullet(text: "IBAN: ${_f(data['iban'])}"),
           ],
         ),
       ),
     );
+    await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
   }
 
-  Widget _buildHeader() {
+  @override
+  Widget build(BuildContext context) {
+    // تحديد عرض الشاشة لضبط التجاوب (Responsive)
+    double screenWidth = MediaQuery.of(context).size.width;
+    bool isDesktop = screenWidth > 900;
+
+    return StreamBuilder<DocumentSnapshot>(
+      stream: FirebaseFirestore.instance.collection('sellers').doc(sellerId).snapshots(),
+      builder: (context, snapshot) {
+        final data = snapshot.hasData ? snapshot.data!.data() as Map<String, dynamic> : sellerData;
+
+        return Scaffold(
+          backgroundColor: const Color(0xFFF8FAFC),
+          appBar: AppBar(
+            title: Text(_f(data['supermarketName']), style: const TextStyle(fontFamily: 'Cairo', fontSize: 18)),
+            backgroundColor: const Color(0xFF1F2937),
+            elevation: 0,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.picture_as_pdf),
+                onPressed: () => _generatePdf(data),
+                tooltip: "تصدير التقرير",
+              ),
+            ],
+          ),
+          body: Center(
+            child: Container(
+              constraints: BoxConstraints(maxWidth: isDesktop ? 1000 : double.infinity),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    _buildHeader(data, isDesktop),
+                    const SizedBox(height: 20),
+                    
+                    // استخدام الـ Grid في الشاشات الكبيرة والـ Column في الموبايل
+                    isDesktop 
+                      ? Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: _buildFinancialCard(data)),
+                            const SizedBox(width: 20),
+                            Expanded(child: _buildBankCard(data)),
+                          ],
+                        )
+                      : Column(
+                          children: [
+                            _buildFinancialCard(data),
+                            const SizedBox(height: 16),
+                            _buildBankCard(data),
+                          ],
+                        ),
+                    const SizedBox(height: 16),
+                    _buildIdentityCard(data),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // --- Widgets البناء ---
+
+  Widget _buildHeader(Map<String, dynamic> data, bool isDesktop) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 5)],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
       ),
       child: Row(
         children: [
           CircleAvatar(
-            radius: 35,
-            backgroundColor: Colors.amber[100],
-            child: const Icon(Icons.store, size: 35, color: Colors.amber),
+            radius: isDesktop ? 40 : 30,
+            backgroundColor: Colors.blue.shade50,
+            child: Icon(Icons.store, size: isDesktop ? 40 : 30, color: Colors.blue.shade700),
           ),
-          const SizedBox(width: 15),
+          const SizedBox(width: 20),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_f(widget.sellerData['fullname']), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                Text("ID: ${widget.sellerId}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                Text(_f(data['fullname']), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                Text("ID: $sellerId", style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                const SizedBox(height: 8),
+                _statusChip(_f(data['status'])),
               ],
             ),
-          )
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildSection(String title, IconData icon, List<Widget> items, {required Color color}) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 15),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  Widget _statusChip(String status) {
+    bool active = status.toLowerCase() == 'active';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: active ? Colors.green.shade50 : Colors.red.shade50,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        active ? "نشط" : "معطل",
+        style: TextStyle(color: active ? Colors.green.shade700 : Colors.red.shade700, fontSize: 12, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  Widget _buildFinancialCard(Map<String, dynamic> data) {
+    return _sectionCard("المؤشرات المالية (AWS Live)", Icons.analytics_outlined, Colors.green, [
+      EditableInfoRow(label: "نسبة العمولة", value: _f(data['commissionRate']), field: "commissionRate", sellerId: sellerId, isNumber: true, suffix: " %"),
+      EditableInfoRow(label: "مديونية الكاش باك", value: _f(data['cashbackAccruedDebt']), field: "cashbackAccruedDebt", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
+      _staticRow("العمولة المحققة", "${_f(data['realizedCommission'])} ج.م"),
+    ]);
+  }
+
+  Widget _buildBankCard(Map<String, dynamic> data) {
+    return _sectionCard("بيانات التحويل البنكي", Icons.account_balance_outlined, Colors.blue, [
+      EditableInfoRow(label: "اسم البنك", value: _f(data['bankName']), field: "bankName", sellerId: sellerId),
+      EditableInfoRow(label: "رقم الحساب", value: _f(data['bankAccountNumber']), field: "bankAccountNumber", sellerId: sellerId),
+      EditableInfoRow(label: "رقم الـ IBAN", value: _f(data['iban']), field: "iban", sellerId: sellerId),
+    ]);
+  }
+
+  Widget _buildIdentityCard(Map<String, dynamic> data) {
+    return _sectionCard("بيانات الهوية والنشاط", Icons.badge_outlined, Colors.orange, [
+      _staticRow("رقم الهاتف", _f(data['phone'])),
+      _staticRow("الرقم الضريبي", _f(data['taxNumber'])),
+      _staticRow("العنوان", _f(data['address'])),
+    ]);
+  }
+
+  Widget _sectionCard(String title, IconData icon, Color color, List<Widget> children) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ListTile(
-            leading: Icon(icon, color: color),
-            title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-          ),
-          const Divider(height: 1),
-          Padding(padding: const EdgeInsets.all(12), child: Column(children: items)),
+          Row(children: [Icon(icon, color: color, size: 20), const SizedBox(width: 8), Text(title, style: const TextStyle(fontWeight: FontWeight.bold))]),
+          const Divider(height: 24),
+          ...children,
         ],
       ),
+    );
+  }
+
+  Widget _staticRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+      ]),
     );
   }
 }
 
-// ✅ الويدجت السحرية للتعديل المباشر في السطر
+// ✅ ويدجت التعديل الذكية بداخل السطر (نفس الكلاس السابق مع تحسينات طفيفة)
 class EditableInfoRow extends StatefulWidget {
   final String label;
   final String value;
@@ -146,52 +216,28 @@ class EditableInfoRow extends StatefulWidget {
   final bool isNumber;
   final String suffix;
 
-  const EditableInfoRow({
-    super.key,
-    required this.label,
-    required this.value,
-    required this.field,
-    required this.sellerId,
-    this.isNumber = false,
-    this.suffix = "",
-  });
+  const EditableInfoRow({super.key, required this.label, required this.value, required this.field, required this.sellerId, this.isNumber = false, this.suffix = ""});
 
   @override
   State<EditableInfoRow> createState() => _EditableInfoRowState();
 }
 
 class _EditableInfoRowState extends State<EditableInfoRow> {
-  bool _isEditing = false;
-  bool _isLoading = false;
-  late TextEditingController _controller;
+  bool _editing = false;
+  bool _loading = false;
+  late TextEditingController _ctrl;
 
   @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.value == "—" ? "" : widget.value);
-  }
+  void initState() { super.initState(); _ctrl = TextEditingController(text: widget.value == "—" ? "" : widget.value); }
 
-  Future<void> _saveChange() async {
-    setState(() => _isLoading = true);
+  Future<void> _update() async {
+    setState(() => _loading = true);
     try {
-      dynamic finalValue = _controller.text;
-      if (widget.isNumber) {
-        finalValue = double.tryParse(_controller.text) ?? 0;
-      }
-
-      await FirebaseFirestore.instance
-          .collection('sellers')
-          .doc(widget.sellerId)
-          .update({widget.field: finalValue});
-
-      setState(() {
-        _isEditing = false;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ في التحديث: $e")));
-    }
+      dynamic v = _ctrl.text;
+      if (widget.isNumber) v = double.tryParse(v) ?? 0.0;
+      await FirebaseFirestore.instance.collection('sellers').doc(widget.sellerId).update({widget.field: v});
+      setState(() { _editing = false; _loading = false; });
+    } catch (e) { setState(() => _loading = false); }
   }
 
   @override
@@ -199,46 +245,22 @@ class _EditableInfoRowState extends State<EditableInfoRow> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(widget.label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: _isEditing
-                  ? Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _controller,
-                            autofocus: true,
-                            keyboardType: widget.isNumber ? TextInputType.number : TextInputType.text,
-                            decoration: const InputDecoration(isDense: true, contentPadding: EdgeInsets.symmetric(vertical: 8)),
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                        ),
-                        IconButton(icon: const Icon(Icons.check, color: Colors.green), onPressed: _saveChange),
-                        IconButton(icon: const Icon(Icons.close, color: Colors.red), onPressed: () => setState(() => _isEditing = false)),
-                      ],
-                    )
-                  : InkWell(
-                      onTap: () => setState(() => _isEditing = true),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (_isLoading)
-                            const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2))
-                          else
-                            const Icon(Icons.edit, size: 14, color: Colors.blueGrey),
-                          const SizedBox(width: 8),
-                          Text("${widget.value}${widget.suffix}", style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-                        ],
-                      ),
-                    ),
-            ),
-          ),
+          const Spacer(),
+          _editing 
+            ? Row(mainAxisSize: MainAxisSize.min, children: [
+                SizedBox(width: 100, child: TextField(controller: _ctrl, style: const TextStyle(fontSize: 13), decoration: const InputDecoration(isDense: true))),
+                IconButton(icon: const Icon(Icons.check, color: Colors.green, size: 18), onPressed: _update),
+              ])
+            : InkWell(
+                onTap: () => setState(() => _editing = true),
+                child: Row(children: [
+                  _loading ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.edit_note, size: 18, color: Colors.blueGrey),
+                  const SizedBox(width: 4),
+                  Text("${widget.value}${widget.suffix}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                ]),
+              ),
         ],
       ),
     );
