@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:http/http.dart' as http;
 import 'dart:convert';
-// لتجنب التحذير (Warning) يفضل استخدام 'package:web/web.dart' في المستقبل
-// ولكن حالياً سنبقي على الحل المتوافق مع المتصفح للتحميل
-import 'dart:html' as html; 
+import 'dart:html' as html; // للتحميل في المتصفح
 
 class BuyersPage extends StatefulWidget {
   const BuyersPage({super.key});
@@ -13,6 +12,9 @@ class BuyersPage extends StatefulWidget {
 }
 
 class _BuyersPageState extends State<BuyersPage> {
+  // نفس الـ API المستخدم في صفحة الإشعارات الترويجية
+  final String SEND_API = 'https://o5d9ke4l82.execute-api.us-east-1.amazonaws.com/V1/m_nofiction';
+
   String _searchQuery = "";
   Map<String, double> _customerPurchases = {};
   List<QueryDocumentSnapshot> _allDocs = [];
@@ -23,54 +25,43 @@ class _BuyersPageState extends State<BuyersPage> {
     _calculateTotalPurchases();
   }
 
-  // حساب إجمالي المشتريات
+  // حساب إجمالي المشتريات من الـ Orders
   Future<void> _calculateTotalPurchases() async {
     try {
       final ordersSnapshot = await FirebaseFirestore.instance.collection("orders").get();
       Map<String, double> purchasesMap = {};
-
       for (var doc in ordersSnapshot.docs) {
         final data = doc.data();
         final buyerData = data['buyer'] as Map<String, dynamic>?;
         final customerId = buyerData != null ? buyerData['id'] : null;
         final total = (data['total'] as num?)?.toDouble() ?? 0.0;
-
         if (customerId != null) {
           purchasesMap[customerId] = (purchasesMap[customerId] ?? 0) + total;
         }
       }
-
       if (mounted) setState(() => _customerPurchases = purchasesMap);
     } catch (e) {
-      debugPrint("Error calculating purchases: $e");
+      debugPrint("Error: $e");
     }
   }
 
-  // تصدير البيانات لـ Excel (CSV)
+  // تصدير البيانات (حل مشكلة التحذير باستخدام Blob)
   void _exportToExcel() {
     if (_allDocs.isEmpty) return;
-    String csvData = "\uFEFF"; // BOM لدعم العربية
-    csvData += "اسم العميل,الهاتف,البريد الإلكتروني,العنوان,الكاش باك,إجمالي المشتريات,الحالة\n";
+    String csvData = "\uFEFF"; // BOM للعربية
+    csvData += "اسم العميل,الهاتف,الكاش باك,المندوب,إجمالي المشتريات,الحالة\n";
 
     for (var doc in _allDocs) {
       final data = doc.data() as Map<String, dynamic>;
-      final id = doc.id;
-      final name = data['fullname'] ?? "غير معروف";
-      final phone = data['phone'] ?? "غير متاح";
-      final email = data['email'] ?? "غير متاح";
-      final address = (data['address'] ?? "غير متاح").toString().replaceAll(',', '-');
-      final cashback = data['cashback'] ?? 0;
-      final totalSpent = _customerPurchases[id] ?? 0.0;
-      final status = data['status'] ?? "نشط";
-
-      csvData += "$name,$phone,$email,$address,$cashback,${totalSpent.toStringAsFixed(2)},$status\n";
+      final totalSpent = _customerPurchases[doc.id] ?? 0.0;
+      csvData += "${data['fullname'] ?? '—'},${data['phone'] ?? '—'},${data['cashback'] ?? 0},${data['repName'] ?? 'تسجيل مباشر'},${totalSpent.toStringAsFixed(2)},${data['status'] ?? 'نشط'}\n";
     }
 
     final bytes = utf8.encode(csvData);
     final blob = html.Blob([bytes], 'text/csv');
     final url = html.Url.createObjectUrlFromBlob(blob);
     html.AnchorElement(href: url)
-      ..setAttribute("download", "customers_report_${DateTime.now().millisecondsSinceEpoch}.csv")
+      ..setAttribute("download", "customers_${DateTime.now().millisecondsSinceEpoch}.csv")
       ..click();
     html.Url.revokeObjectUrl(url);
   }
@@ -80,15 +71,11 @@ class _BuyersPageState extends State<BuyersPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF2F4F8),
       appBar: AppBar(
-        title: const Text("إدارة العملاء", style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
+        title: const Text("إدارة العملاء", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF1F2937),
         foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.file_download),
-            onPressed: _exportToExcel,
-            tooltip: "تصدير للتميز",
-          ),
+          IconButton(icon: const Icon(Icons.file_download), onPressed: _exportToExcel),
         ],
       ),
       body: Column(
@@ -107,7 +94,7 @@ class _BuyersPageState extends State<BuyersPage> {
       child: TextField(
         onChanged: (value) => setState(() => _searchQuery = value),
         decoration: InputDecoration(
-          hintText: "ابحث باسم العميل أو الهاتف...",
+          hintText: "ابحث بالاسم أو الهاتف...",
           prefixIcon: const Icon(Icons.search),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(30)),
           filled: true,
@@ -121,26 +108,20 @@ class _BuyersPageState extends State<BuyersPage> {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection("users").orderBy("createdAt", descending: true).snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) return const Center(child: Text("حدث خطأ في جلب البيانات"));
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         _allDocs = snapshot.data!.docs;
-        final filteredDocs = _allDocs.where((doc) {
+        final filtered = _allDocs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
-          final name = (data['fullname'] ?? "").toString().toLowerCase();
-          final phone = (data['phone'] ?? "").toString();
-          return name.contains(_searchQuery.toLowerCase()) || phone.contains(_searchQuery);
+          return (data['fullname'] ?? "").toString().contains(_searchQuery) || (data['phone'] ?? "").toString().contains(_searchQuery);
         }).toList();
-
-        if (filteredDocs.isEmpty) return const Center(child: Text("لا يوجد نتائج للبحث"));
 
         return ListView.builder(
           padding: const EdgeInsets.all(12),
-          itemCount: filteredDocs.length,
+          itemCount: filtered.length,
           itemBuilder: (context, index) {
-            final customer = filteredDocs[index].data() as Map<String, dynamic>;
-            final id = filteredDocs[index].id;
-            return _buildCustomerCard(id, customer);
+            final id = filtered[index].id;
+            final data = filtered[index].data() as Map<String, dynamic>;
+            return _buildCustomerCard(id, data);
           },
         );
       },
@@ -148,54 +129,26 @@ class _BuyersPageState extends State<BuyersPage> {
   }
 
   Widget _buildCustomerCard(String id, Map<String, dynamic> customer) {
-    final totalSpent = _customerPurchases[id] ?? 0.0;
-    final status = customer['status'] ?? 'active';
-
     return Card(
+      margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      margin: const EdgeInsets.only(bottom: 15),
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(15),
+        title: Text(customer['fullname'] ?? "اسم غير متاح", style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                CircleAvatar(backgroundColor: Colors.blueGrey[100], child: Text(customer['fullname']?[0] ?? "U")),
-                const SizedBox(width: 12),
-                Expanded(child: Text(customer['fullname'] ?? "اسم غير متاح", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
-                _buildStatusBadge(status),
-              ],
-            ),
-            const Divider(height: 25),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _infoChip(Icons.phone, customer['phone'] ?? "—", Colors.blue),
-                _infoChip(Icons.account_balance_wallet, "${customer['cashback'] ?? 0} ج.م", Colors.orange),
-                _infoChip(Icons.shopping_cart, "${totalSpent.toStringAsFixed(0)} ج.م", Colors.green),
-              ],
-            ),
-            const SizedBox(height: 15),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => _showDetails(id, customer),
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1F2937), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                child: const Text("التفاصيل وإرسال إشعار", style: TextStyle(color: Colors.white)),
-              ),
-            )
+            Text("📞 ${customer['phone'] ?? '—'}"),
+            Text("💰 كاش باك: ${customer['cashback'] ?? 0} ج.م", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+            Text("👤 المندوب: ${customer['repName'] ?? 'تسجيل مباشر'}", style: const TextStyle(fontSize: 12, color: Colors.blueGrey)),
           ],
         ),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        onTap: () => _showDetails(id, customer),
       ),
     );
   }
 
-  Widget _infoChip(IconData icon, String text, Color color) {
-    return Row(children: [Icon(icon, size: 14, color: color), const SizedBox(width: 4), Text(text, style: const TextStyle(fontSize: 12))]);
-  }
-
-  // --- المنبثقة المطورة ---
   void _showDetails(String id, Map<String, dynamic> customer) {
     showModalBottomSheet(
       context: context,
@@ -205,38 +158,32 @@ class _BuyersPageState extends State<BuyersPage> {
         padding: const EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Center(child: Text("بيانات العميل التفصيلية", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
-            const Divider(height: 30),
-            _detailItem("الرقم التعريفي (UID):", id),
-            _detailItem("الاسم:", customer['fullname']),
-            _detailItem("الهاتف:", customer['phone']),
-            _detailItem("العنوان:", customer['address']),
-            _detailItem("الكاش باك الحالي:", "${customer['cashback'] ?? 0} ج.م"),
-            _detailItem("المندوب المسجل:", customer['repName'] ?? "تسجيل ذاتي"),
-            _detailItem("تاريخ التسجيل:", _formatDate(customer['createdAt'])),
+            const Text("تفاصيل العميل", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+            const Divider(),
+            _detailRow("UID:", id),
+            _detailRow("العنوان:", customer['address']),
+            _detailRow("تاريخ التسجيل:", _formatDate(customer['createdAt'])),
             const SizedBox(height: 20),
             
-            // زر إرسال الإشعار (Notification via ARN)
+            // زر إرسال إشعار (بنفس صيغة صفحة الـ Promo)
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                icon: const Icon(Icons.notifications_active),
-                label: const Text("إرسال إشعار خاص (Push Notification)"),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.amber[800], foregroundColor: Colors.white),
-                onPressed: () => _sendNotificationDialog(customer),
+                icon: const Icon(Icons.send),
+                label: const Text("إرسال إشعار لهذا العميل", style: TextStyle(fontFamily: 'Cairo')),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white),
+                onPressed: () => _sendNotificationDialog(id, customer['fullname'] ?? ""),
               ),
             ),
             const SizedBox(height: 10),
             
-            // زر تغيير الحالة
+            // زر تبديل الحالة
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
-                style: OutlinedButton.styleFrom(foregroundColor: customer['status'] == 'inactive' ? Colors.green : Colors.red),
                 onPressed: () => _toggleStatus(id, customer['status']),
-                child: Text(customer['status'] == 'inactive' ? "تنشيط الحساب" : "تعطيل الحساب"),
+                child: Text(customer['status'] == 'inactive' ? "تنشيط الحساب" : "تعطيل الحساب", style: const TextStyle(fontFamily: 'Cairo')),
               ),
             ),
           ],
@@ -245,51 +192,78 @@ class _BuyersPageState extends State<BuyersPage> {
     );
   }
 
-  // دالة إرسال الإشعار (هنا تربطها بـ AWS SNS / ARN)
-  void _sendNotificationDialog(Map<String, dynamic> customer) {
-    final titleCtrl = TextEditingController(text: "أهلاً ${customer['fullname']}");
-    final bodyCtrl = TextEditingController();
+  // دايلوج الإرسال المبسط (بنفس الـ API والـ Sound)
+  void _sendNotificationDialog(String userId, String userName) {
+    final msgCtrl = TextEditingController();
+    String selectedSound = 'default';
+    bool isSending = false;
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("إرسال إشعار عبر ARN"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: titleCtrl, decoration: const InputDecoration(labelText: "عنوان الإشعار")),
-            TextField(controller: bodyCtrl, decoration: const InputDecoration(labelText: "نص الرسالة")),
-            const SizedBox(height: 10),
-            Text("Target ARN: ${customer['fcmToken'] != null ? 'متوفر' : 'غير متوفر'}", style: const TextStyle(fontSize: 10, color: Colors.grey)),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text("إشعار إلى $userName", style: const TextStyle(fontSize: 16, fontFamily: 'Cairo')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: msgCtrl,
+                maxLines: 3,
+                decoration: const InputDecoration(hintText: "اكتب نص الرسالة هنا...", border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 10),
+              DropdownButton<String>(
+                value: selectedSound,
+                isExpanded: true,
+                items: const [
+                  DropdownMenuItem(value: 'default', child: Text("نغمة افتراضية")),
+                  DropdownMenuItem(value: 'wallet_add', child: Text("نغمة شحن محفظة")),
+                  DropdownMenuItem(value: 'promo_msg', child: Text("نغمة عرض ترويجي")),
+                ],
+                onChanged: (val) => setDialogState(() => selectedSound = val!),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("إلغاء")),
+            ElevatedButton(
+              onPressed: isSending ? null : () async {
+                if (msgCtrl.text.isEmpty) return;
+                setDialogState(() => isSending = true);
+                
+                try {
+                  final response = await http.post(
+                    Uri.parse(SEND_API),
+                    headers: {'Content-Type': 'application/json'},
+                    body: json.encode({
+                      'topic': userId, // نرسل لـ UID الخاص بالعميل كـ Topic
+                      'title': "تنبيه من الإدارة 📢",
+                      'message': msgCtrl.text,
+                      'sound': selectedSound,
+                      'data': {
+                        'screen': 'Home',
+                        'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+                      }
+                    }),
+                  );
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(response.statusCode == 200 ? "تم الإرسال" : "فشل الإرسال")));
+                } catch (e) {
+                  Navigator.pop(ctx);
+                }
+              },
+              child: isSending ? const CircularProgressIndicator() : const Text("إرسال"),
+            ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("إلغاء")),
-          ElevatedButton(
-            onPressed: () async {
-              // منطق الإرسال الخاص بك هنا
-              // عادة يتم استدعاء Cloud Function ترسل لـ AWS SNS باستخدام الـ Token/ARN
-              debugPrint("Sending to ARN: ${customer['fcmToken']}");
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("جاري معالجة إرسال الإشعار...")));
-            },
-            child: const Text("إرسال الآن"),
-          ),
-        ],
       ),
     );
   }
 
-  Widget _detailItem(String label, dynamic value) {
+  Widget _detailRow(String label, dynamic value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-          const SizedBox(width: 10),
-          Expanded(child: Text("${value ?? 'غير متوفر'}", style: const TextStyle(fontSize: 13))),
-        ],
-      ),
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(children: [Text(label, style: const TextStyle(fontWeight: FontWeight.bold)), const SizedBox(width: 10), Expanded(child: Text("${value ?? '—'}"))]),
     );
   }
 
@@ -298,23 +272,13 @@ class _BuyersPageState extends State<BuyersPage> {
       DateTime dt = date.toDate();
       return "${dt.year}-${dt.month}-${dt.day}";
     }
-    return "غير متوفر";
+    return "—";
   }
 
   void _toggleStatus(String id, String? currentStatus) async {
     final newStatus = (currentStatus == 'inactive') ? 'active' : 'inactive';
     await FirebaseFirestore.instance.collection("users").doc(id).update({'status': newStatus});
     if (mounted) Navigator.pop(context);
-  }
-
-  Widget _buildStatusBadge(String status) {
-    Color color = Colors.green;
-    if (status == 'inactive') color = Colors.grey;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(10)),
-      child: Text(status == 'inactive' ? "معطل" : "نشط", style: const TextStyle(color: Colors.white, fontSize: 10)),
-    );
   }
 }
 
