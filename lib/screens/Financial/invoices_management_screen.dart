@@ -66,14 +66,15 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7F6),
       appBar: AppBar(
-        title: const Text("قائمة الفواتير - الإدارة", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+        title: const Text("قائمة الفواتير - الإدارة", 
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFFB30000),
         centerTitle: true,
       ),
       body: Column(
         children: [
           _buildFilters(),
-          _buildCashRequestsSection(), // تنبيهات التحصيل النقدي (مثل المستطيل الأصفر في HTML)
+          _buildCashRequestsSection(), 
           Expanded(child: _buildInvoicesList()),
         ],
       ),
@@ -134,9 +135,11 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
             children: [
               const Row(
                 children: [
-                  Icon(Icons.truck_outlined, color: Color(0xFF856404)),
+                  // ✅ تم التصحيح: استبدال truck_outlined بـ local_shipping_outlined
+                  Icon(Icons.local_shipping_outlined, color: Color(0xFF856404)),
                   SizedBox(width: 8),
-                  Text("طلبات تحصيل نقدي معلّقة", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF856404))),
+                  Text("طلبات تحصيل نقدي معلّقة", 
+                      style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF856404))),
                 ],
               ),
               const Divider(),
@@ -148,9 +151,13 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Expanded(child: Text("$sellerName طلب تحصيل ${formatCurrency(data['amount'])}", style: const TextStyle(fontSize: 12))),
+                      Expanded(child: Text("$sellerName طلب تحصيل ${formatCurrency(data['amount'])}", 
+                          style: const TextStyle(fontSize: 12))),
                       ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC3545), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 8)),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFDC3545), 
+                            foregroundColor: Colors.white, 
+                            padding: const EdgeInsets.symmetric(horizontal: 8)),
                         onPressed: () => _handleCashRequest(doc.id, data['invoiceId']),
                         child: const Text("تم التعامل", style: TextStyle(fontSize: 11)),
                       ),
@@ -176,7 +183,8 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
           var data = doc.data() as Map<String, dynamic>;
           bool matchStatus = _selectedStatus == 'جميع الحالات' || data['status'] == _selectedStatus;
           String sellerName = _sellerNames[data['sellerId']]?.toLowerCase() ?? "";
-          bool matchSearch = sellerName.contains(_searchQuery.toLowerCase()) || data['sellerId'].toString().contains(_searchQuery);
+          bool matchSearch = sellerName.contains(_searchQuery.toLowerCase()) || 
+                             data['sellerId'].toString().contains(_searchQuery);
           return matchStatus && matchSearch;
         }).toList();
 
@@ -185,7 +193,7 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
           itemBuilder: (context, index) {
             var data = invoices[index].data() as Map<String, dynamic>;
             String status = data['status'] ?? 'pending';
-            
+
             return Card(
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               elevation: 2,
@@ -195,8 +203,10 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
                   backgroundColor: status == 'paid' ? Colors.green : (status == 'cancelled' ? Colors.grey : Colors.orange),
                   child: const Icon(Icons.receipt_long, color: Colors.white, size: 20),
                 ),
-                title: Text(_sellerNames[data['sellerId']] ?? 'تاجر #${data['sellerId'].toString().substring(0,5)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                subtitle: Text("المبلغ: ${formatCurrency(data['finalAmount'])} | ${getStatusText(status)}", style: const TextStyle(fontSize: 12)),
+                title: Text(_sellerNames[data['sellerId']] ?? 'تاجر #${data['sellerId'].toString().substring(0,5)}', 
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                subtitle: Text("المبلغ: ${formatCurrency(data['finalAmount'])} | ${getStatusText(status)}", 
+                    style: const TextStyle(fontSize: 12)),
                 children: [
                   Padding(
                     padding: const EdgeInsets.all(15),
@@ -210,7 +220,8 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
                             children: [
                               Expanded(
                                 child: ElevatedButton.icon(
-                                  icon: const Icon(Icons.money_bill),
+                                  // ✅ تم التصحيح: استبدال money_bill بـ payments
+                                  icon: const Icon(Icons.payments),
                                   label: const Text("تسجيل سداد نقدي"),
                                   style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
                                   onPressed: () => _markInvoiceAsPaid(invoices[index].id),
