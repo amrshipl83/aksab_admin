@@ -21,18 +21,44 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
     _loadSellers();
   }
 
-  // جلب أسماء التجار لربطها بالـ ID
   Future<void> _loadSellers() async {
-    final snapshot = await _db.collection('sellers').get();
-    Map<String, String> tempNames = {};
-    for (var doc in snapshot.docs) {
-      tempNames[doc.id] = doc.data()['supermarketName'] ?? 'تاجر غير معروف';
+    try {
+      final snapshot = await _db.collection('sellers').get();
+      Map<String, String> tempNames = {};
+      for (var doc in snapshot.docs) {
+        tempNames[doc.id] = doc.data()['supermarketName'] ?? 'تاجر غير معروف';
+      }
+      if (mounted) setState(() => _sellerNames = tempNames);
+    } catch (e) {
+      debugPrint("خطأ في جلب أسماء التجار: $e");
     }
-    setState(() => _sellerNames = tempNames);
   }
 
-  String formatCurrency(double amount) {
-    return NumberFormat.currency(locale: 'ar_EG', symbol: 'ج.م').format(amount);
+  String formatCurrency(dynamic amount) {
+    double value = (amount is num) ? amount.toDouble() : 0.0;
+    return NumberFormat.currency(locale: 'ar_EG', symbol: 'ج.م', decimalDigits: 2).format(value);
+  }
+
+  String formatDate(dynamic dateValue) {
+    if (dateValue == null) return '--';
+    DateTime dt;
+    if (dateValue is Timestamp) {
+      dt = dateValue.toDate();
+    } else if (dateValue is String) {
+      dt = DateTime.tryParse(dateValue) ?? DateTime.now();
+    } else {
+      return '--';
+    }
+    return DateFormat('yyyy/MM/dd', 'ar_EG').format(dt);
+  }
+
+  String getStatusText(String status) {
+    switch (status) {
+      case 'pending': return 'مستحقة للدفع';
+      case 'paid': return 'تم السداد';
+      case 'cancelled': return 'ملغاة';
+      default: return status;
+    }
   }
 
   @override
@@ -40,71 +66,95 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7F6),
       appBar: AppBar(
-        title: const Text("إدارة الفواتير والتحصيل", style: TextStyle(fontFamily: 'Cairo')),
+        title: const Text("قائمة الفواتير - الإدارة", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFFB30000),
+        centerTitle: true,
       ),
       body: Column(
         children: [
           _buildFilters(),
-          _buildCashRequests(), // قسم طلبات الكاش المعلقة
+          _buildCashRequestsSection(), // تنبيهات التحصيل النقدي (مثل المستطيل الأصفر في HTML)
           Expanded(child: _buildInvoicesList()),
         ],
       ),
     );
   }
 
-  // 1. قسم الفلاتر (البحث والحالة)
   Widget _buildFilters() {
     return Container(
-      padding: const EdgeInsets.all(15),
+      padding: const EdgeInsets.all(12),
       color: Colors.white,
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: TextField(
-              decoration: const InputDecoration(
-                hintText: "بحث باسم التاجر...",
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (val) => setState(() => _searchQuery = val),
+          TextField(
+            decoration: InputDecoration(
+              hintText: "البحث باسم أو معرف التاجر...",
+              prefixIcon: const Icon(Icons.search, color: Color(0xFFB30000)),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             ),
+            onChanged: (val) => setState(() => _searchQuery = val),
           ),
-          const SizedBox(width: 10),
-          DropdownButton<String>(
-            value: _selectedStatus,
-            items: ['جميع الحالات', 'pending', 'paid', 'cancelled']
-                .map((s) => DropdownMenuItem(value: s, child: Text(s == 'pending' ? 'مستحقة' : s == 'paid' ? 'تم السداد' : s)))
-                .toList(),
-            onChanged: (val) => setState(() => _selectedStatus = val!),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const Text("تصفية حسب الحالة: ", style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: DropdownButton<String>(
+                  isExpanded: true,
+                  value: _selectedStatus,
+                  items: ['جميع الحالات', 'pending', 'paid', 'cancelled']
+                      .map((s) => DropdownMenuItem(value: s, child: Text(getStatusText(s))))
+                      .toList(),
+                  onChanged: (val) => setState(() => _selectedStatus = val!),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  // 2. طلبات التحصيل النقدي (Cash Requests)
-  Widget _buildCashRequests() {
+  Widget _buildCashRequestsSection() {
     return StreamBuilder<QuerySnapshot>(
       stream: _db.collection('cash_collection_requests').where('status', isEqualTo: 'new').snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const SizedBox();
         return Container(
-          margin: const EdgeInsets.all(10),
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(color: Colors.amber[100], borderRadius: BorderRadius.circular(8)),
+          margin: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF3CD),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: const Color(0xFFFFEEBA)),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("⚠️ طلبات تحصيل نقدي جديدة:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.brown)),
+              const Row(
+                children: [
+                  Icon(Icons.truck_outlined, color: Color(0xFF856404)),
+                  SizedBox(width: 8),
+                  Text("طلبات تحصيل نقدي معلّقة", style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF856404))),
+                ],
+              ),
+              const Divider(),
               ...snapshot.data!.docs.map((doc) {
                 var data = doc.data() as Map<String, dynamic>;
-                return ListTile(
-                  title: Text(_sellerNames[data['sellerId']] ?? 'تاجر #${data['sellerId']}'),
-                  subtitle: Text("المبلغ: ${formatCurrency(data['amount'].toDouble())}"),
-                  trailing: ElevatedButton(
-                    onPressed: () => _processCashRequest(doc.id, data['invoiceId']),
-                    child: const Text("تم التحصيل"),
+                String sellerName = _sellerNames[data['sellerId']] ?? 'تاجر #${data['sellerId'].toString().substring(0, 5)}';
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(child: Text("$sellerName طلب تحصيل ${formatCurrency(data['amount'])}", style: const TextStyle(fontSize: 12))),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFDC3545), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 8)),
+                        onPressed: () => _handleCashRequest(doc.id, data['invoiceId']),
+                        child: const Text("تم التعامل", style: TextStyle(fontSize: 11)),
+                      ),
+                    ],
                   ),
                 );
               }),
@@ -115,17 +165,18 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
     );
   }
 
-  // 3. قائمة الفواتير
   Widget _buildInvoicesList() {
     return StreamBuilder<QuerySnapshot>(
       stream: _db.collection('invoices').snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (!snapshot.hasData) return const Center(child: Text("لا توجد بيانات"));
+
         var invoices = snapshot.data!.docs.where((doc) {
           var data = doc.data() as Map<String, dynamic>;
           bool matchStatus = _selectedStatus == 'جميع الحالات' || data['status'] == _selectedStatus;
-          bool matchSearch = _sellerNames[data['sellerId']]?.contains(_searchQuery) ?? true;
+          String sellerName = _sellerNames[data['sellerId']]?.toLowerCase() ?? "";
+          bool matchSearch = sellerName.contains(_searchQuery.toLowerCase()) || data['sellerId'].toString().contains(_searchQuery);
           return matchStatus && matchSearch;
         }).toList();
 
@@ -133,22 +184,45 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
           itemCount: invoices.length,
           itemBuilder: (context, index) {
             var data = invoices[index].data() as Map<String, dynamic>;
+            String status = data['status'] ?? 'pending';
+            
             return Card(
-              margin: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-              child: ListTile(
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              elevation: 2,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              child: ExpansionTile(
                 leading: CircleAvatar(
-                  backgroundColor: data['status'] == 'paid' ? Colors.green : Colors.red,
-                  child: const Icon(Icons.receipt, color: Colors.white),
+                  backgroundColor: status == 'paid' ? Colors.green : (status == 'cancelled' ? Colors.grey : Colors.orange),
+                  child: const Icon(Icons.receipt_long, color: Colors.white, size: 20),
                 ),
-                title: Text(_sellerNames[data['sellerId']] ?? 'تاجر غير معروف'),
-                subtitle: Text("المبلغ: ${formatCurrency(data['finalAmount'].toDouble())}\nالحالة: ${data['status']}"),
-                trailing: data['status'] == 'pending' 
-                  ? ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-                      onPressed: () => _markAsPaid(invoices[index].id),
-                      child: const Text("سداد نقدي", style: TextStyle(color: Colors.white)),
-                    )
-                  : const Icon(Icons.check_circle, color: Colors.green),
+                title: Text(_sellerNames[data['sellerId']] ?? 'تاجر #${data['sellerId'].toString().substring(0,5)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                subtitle: Text("المبلغ: ${formatCurrency(data['finalAmount'])} | ${getStatusText(status)}", style: const TextStyle(fontSize: 12)),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(15),
+                    child: Column(
+                      children: [
+                        _buildInfoRow("معرف الفاتورة:", invoices[index].id.substring(0, 8)),
+                        _buildInfoRow("تاريخ الإصدار:", formatDate(data['creationDate'])),
+                        if (status == 'pending') ...[
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  icon: const Icon(Icons.money_bill),
+                                  label: const Text("تسجيل سداد نقدي"),
+                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                                  onPressed: () => _markInvoiceAsPaid(invoices[index].id),
+                                ),
+                              ),
+                            ],
+                          )
+                        ]
+                      ],
+                    ),
+                  )
+                ],
               ),
             );
           },
@@ -157,36 +231,55 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
     );
   }
 
-  // إجراء تسجيل السداد
-  Future<void> _markAsPaid(String id) async {
-    bool confirm = await _showConfirmDialog();
-    if (confirm) {
-      await _db.collection('invoices').doc(id).update({
-        'status': 'paid',
-        'paymentDate': DateTime.now().toIso8601String(),
-        'paymentMethod': 'Manual_Cash_Admin'
-      });
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ تم تسجيل السداد بنجاح")));
+  Widget _buildInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleCashRequest(String requestId, String invoiceId) async {
+    bool? confirm = await _showConfirmDialog("تنبيه", "هل تم تحصيل المبلغ أو تحديد موعد؟");
+    if (confirm == true) {
+      await _db.collection('cash_collection_requests').doc(requestId).update({'status': 'processed'});
+      _markInvoiceAsPaid(invoiceId);
     }
   }
 
-  Future<void> _processCashRequest(String reqId, String invId) async {
-    await _db.collection('cash_collection_requests').doc(reqId).update({'status': 'processed'});
-    _markAsPaid(invId);
+  Future<void> _markInvoiceAsPaid(String invoiceId) async {
+    bool? confirm = await _showConfirmDialog("تأكيد السداد", "هل أنت متأكد من تسجيل سداد نقدي كامل للفاتورة؟");
+    if (confirm == true) {
+      try {
+        await _db.collection('invoices').doc(invoiceId).update({
+          'status': 'paid',
+          'paymentDate': DateTime.now().toIso8601String(),
+          'paymentMethod': 'Manual_Cash_Admin'
+        });
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ تم تسجيل السداد بنجاح")));
+      } catch (e) {
+        debugPrint("خطأ في التحديث: $e");
+      }
+    }
   }
 
-  Future<bool> _showConfirmDialog() async {
-    return await showDialog(
+  Future<bool?> _showConfirmDialog(String title, String content) {
+    return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("تأكيد السداد"),
-        content: const Text("هل تم استلام المبلغ نقداً من التاجر؟"),
+        title: Text(title),
+        content: Text(content),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("إلغاء")),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("تأكيد")),
         ],
       ),
-    ) ?? false;
+    );
   }
 }
 
