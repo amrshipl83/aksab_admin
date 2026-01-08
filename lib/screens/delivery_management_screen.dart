@@ -28,7 +28,8 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
       length: 3,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text("إدارة وطلبات الدليفري", style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
+          title: const Text("إدارة وطلبات الدليفري",
+              style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
           centerTitle: true,
           bottom: const TabBar(
             isScrollable: false,
@@ -50,14 +51,18 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
     );
   }
 
-  // 1. تبويب الطلبات المعلقة (المراجعة قبل التفعيل)
+  // 1. تبويب الطلبات المعلقة
   Widget _buildPendingTab() {
     return StreamBuilder<QuerySnapshot>(
       stream: _service.getPendingRequests(),
       builder: (context, snapshot) {
         if (snapshot.hasError) return Center(child: Text("خطأ: ${snapshot.error}"));
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text("لا توجد طلبات معلقة حالياً"));
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Text("لا توجد طلبات معلقة حالياً"));
+        }
 
         return ListView.builder(
           padding: const EdgeInsets.symmetric(vertical: 10),
@@ -76,14 +81,18 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
     );
   }
 
-  // 2. تبويب السوبر ماركتات المفعلة (عرض التفاصيل الكاملة)
+  // 2. تبويب السوبر ماركتات المفعلة
   Widget _buildActiveTab() {
     return StreamBuilder<QuerySnapshot>(
       stream: _service.getActiveSupermarkets(),
       builder: (context, snapshot) {
         if (snapshot.hasError) return Center(child: Text("خطأ: ${snapshot.error}"));
-        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text("لا توجد ماركتات مفعلة"));
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(child: Text("لا توجد ماركتات مفعلة"));
+        }
 
         return ListView.builder(
           itemCount: snapshot.data!.docs.length,
@@ -95,7 +104,8 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
               elevation: 2,
               child: ExpansionTile(
                 title: Text(model.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text("الحالة: ${model.isActive ? 'نشط' : 'معطل'} | التوصيل: ${model.deliveryFee} ج.م"),
+                subtitle: Text(
+                    "الحالة: ${model.isActive ? 'نشط' : 'معطل'} | التوصيل: ${model.deliveryFee} ج.م"),
                 leading: Icon(Icons.store, color: model.isActive ? Colors.green : Colors.grey),
                 trailing: Switch(
                   value: model.isActive,
@@ -126,7 +136,7 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
     );
   }
 
-  // 3. تبويب تقارير الطلبات مع البحث وتصدير الإكسل
+  // 3. تبويب تقارير الطلبات
   Widget _buildReportsTab() {
     return Column(
       children: [
@@ -156,11 +166,16 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
         ),
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('consumerorders').orderBy('orderDate', descending: true).snapshots(),
+            stream: FirebaseFirestore.instance
+                .collection('consumerorders')
+                .orderBy('orderDate', descending: true)
+                .snapshots(),
             builder: (context, snapshot) {
               if (snapshot.hasError) return Center(child: Text("خطأ: ${snapshot.error}"));
-              if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-              
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
               var orders = snapshot.data!.docs.where((doc) {
                 var name = doc['supermarketName']?.toString().toLowerCase() ?? "";
                 return name.contains(_searchQuery.toLowerCase());
@@ -185,7 +200,9 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
                         DataCell(Text(order['supermarketName'] ?? 'N/A')),
                         DataCell(Text("${order['finalAmount'] ?? 0} ج.م")),
                         DataCell(Text(_formatDate(order['orderDate']))),
-                        DataCell(IconButton(icon: const Icon(Icons.remove_red_eye, color: Colors.blue), onPressed: () => _showOrderDetails(order))),
+                        DataCell(IconButton(
+                            icon: const Icon(Icons.remove_red_eye, color: Colors.blue),
+                            onPressed: () => _showOrderDetails(order))),
                       ]);
                     }).toList(),
                   ),
@@ -229,28 +246,42 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
     );
   }
 
+  // دالة الإكسل المصححة لتجنب أخطاء الـ Build
   Future<void> _exportToExcel() async {
     var excel = Excel.createExcel();
     Sheet sheetObject = excel['Sheet1'];
-    sheetObject.appendRow(["الماركت", "العميل", "العنوان", "الإجمالي", "رسوم التوصيل", "التاريخ"]);
+
+    // استخدام TextCellValue بدلاً من String مباشرة
+    sheetObject.appendRow([
+      TextCellValue("الماركت"),
+      TextCellValue("العميل"),
+      TextCellValue("العنوان"),
+      TextCellValue("الإجمالي"),
+      TextCellValue("رسوم التوصيل"),
+      TextCellValue("التاريخ"),
+    ]);
 
     var snapshot = await FirebaseFirestore.instance.collection('consumerorders').get();
     for (var doc in snapshot.docs) {
       var data = doc.data();
       sheetObject.appendRow([
-        data['supermarketName'],
-        data['customerName'],
-        data['customerAddress'],
-        data['finalAmount'],
-        data['deliveryFee'],
-        _formatDate(data['orderDate']),
+        TextCellValue(data['supermarketName']?.toString() ?? 'N/A'),
+        TextCellValue(data['customerName']?.toString() ?? 'N/A'),
+        TextCellValue(data['customerAddress']?.toString() ?? 'N/A'),
+        DoubleCellValue(double.tryParse(data['finalAmount']?.toString() ?? '0') ?? 0.0),
+        DoubleCellValue(double.tryParse(data['deliveryFee']?.toString() ?? '0') ?? 0.0),
+        TextCellValue(_formatDate(data['orderDate'])),
       ]);
     }
 
     final directory = await getApplicationDocumentsDirectory();
     final file = File('${directory.path}/Delivery_Reports.xlsx');
-    await file.writeAsBytes(excel.save()!);
-    Share.shareXFiles([XFile(file.path)], text: 'تقرير مبيعات الدليفري');
+    
+    var fileBytes = excel.save();
+    if (fileBytes != null) {
+      await file.writeAsBytes(fileBytes);
+      Share.shareXFiles([XFile(file.path)], text: 'تقرير مبيعات الدليفري');
+    }
   }
 
   String _formatDate(dynamic timestamp) {
@@ -263,7 +294,12 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
   Widget _infoRow(IconData icon, String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(children: [Icon(icon, size: 18, color: Colors.blue), const SizedBox(width: 8), Text("$label: ", style: const TextStyle(fontWeight: FontWeight.bold)), Text(value)]),
+      child: Row(children: [
+        Icon(icon, size: 18, color: Colors.blue),
+        const SizedBox(width: 8),
+        Text("$label: ", style: const TextStyle(fontWeight: FontWeight.bold)),
+        Text(value)
+      ]),
     );
   }
 
@@ -290,7 +326,7 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
             Text("الهاتف: ${order['customerPhone'] ?? 'غير متوفر'}"),
             const Divider(),
             const Text("المنتجات:", style: TextStyle(fontWeight: FontWeight.bold)),
-            ... (order['items'] as List).map((i) => Text("- ${i['name']} (${i['quantity']})")),
+            ...(order['items'] as List).map((i) => Text("- ${i['name']} (${i['quantity']})")),
           ],
         ),
         actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("إغلاق"))],
@@ -298,9 +334,23 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
     );
   }
 
-  void _showLoading() => showDialog(context: context, barrierDismissible: false, builder: (context) => const Center(child: CircularProgressIndicator()));
+  void _showLoading() => showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()));
   void _hideLoading() => Navigator.pop(context);
-  void _showSnackBar(String m, Color c) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), backgroundColor: c));
-  Future<bool> _showConfirmDialog() async => await showDialog<bool>(context: context, builder: (context) => AlertDialog(title: const Text("تأكيد"), content: const Text("هل أنت متأكد؟"), actions: [TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("إلغاء")), TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("تأكيد"))])) ?? false;
+  void _showSnackBar(String m, Color c) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m), backgroundColor: c));
+  Future<bool> _showConfirmDialog() async =>
+      await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+                  title: const Text("تأكيد"),
+                  content: const Text("هل أنت متأكد؟"),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("إلغاء")),
+                    TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("تأكيد"))
+                  ])) ??
+      false;
 }
 
