@@ -1,7 +1,6 @@
+// lib/pages/seller_details_page.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:printing/printing.dart';
-import 'dart:typed_data'; // ضروري للـ Bytes
 
 class SellerDetailsPage extends StatelessWidget {
   final String sellerId;
@@ -19,12 +18,13 @@ class SellerDetailsPage extends StatelessWidget {
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('sellers').doc(sellerId).snapshots(),
       builder: (context, snapshot) {
+        // نستخدم البيانات المباشرة من Firestore إذا توفرت، وإلا نستخدم البيانات الممررة
         final data = snapshot.hasData ? snapshot.data!.data() as Map<String, dynamic> : sellerData;
 
         return Scaffold(
           backgroundColor: const Color(0xFFF8FAFC),
           appBar: AppBar(
-            title: Text(_f(data['merchantName'] ?? data['supermarketName']), 
+            title: Text(_f(data['merchantName'] ?? data['fullname']),
                 style: const TextStyle(fontFamily: 'Cairo', fontSize: 18)),
             backgroundColor: const Color(0xFF1F2937),
           ),
@@ -37,22 +37,28 @@ class SellerDetailsPage extends StatelessWidget {
                   children: [
                     _buildHeader(data, isDesktop),
                     const SizedBox(height: 20),
-                    if (isDesktop) 
+                    
+                    // قسم العمولة المطور (نسبة + ثابت)
+                    _buildCommissionCard(data),
+                    const SizedBox(height: 16),
+                    
+                    if (isDesktop)
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(child: _buildFinancialCard(data)),
-                          const SizedBox(width: 20),
                           Expanded(child: _buildOperationsCard(data)),
+                          const SizedBox(width: 20),
+                          Expanded(child: _buildBankCard(data)),
                         ],
                       )
                     else ...[
-                      _buildFinancialCard(data),
-                      const SizedBox(height: 16),
                       _buildOperationsCard(data),
+                      const SizedBox(height: 16),
+                      _buildBankCard(data),
                     ],
+                    
                     const SizedBox(height: 16),
-                    _buildBankCard(data),
+                    _buildDocumentsCard(context, data), // عرض السجل والبطاقة الضريبية
                     const SizedBox(height: 16),
                     _buildIdentityCard(data),
                   ],
@@ -66,23 +72,30 @@ class SellerDetailsPage extends StatelessWidget {
   }
 
   Widget _buildHeader(Map<String, dynamic> data, bool isDesktop) {
+    // دعم كلا مفتاحي الشعار (القديم والجديد من Cloudinary)
+    String? logo = data['logoUrl'] ?? data['merchantLogoUrl'];
+    
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
+      decoration: BoxDecoration(
+          color: Colors.white, 
+          borderRadius: BorderRadius.circular(16), 
+          border: Border.all(color: Colors.grey.shade200)),
       child: Row(
         children: [
           CircleAvatar(
             radius: isDesktop ? 40 : 30,
-            backgroundImage: data['merchantLogoUrl'] != null ? NetworkImage(data['merchantLogoUrl']) : null,
-            child: data['merchantLogoUrl'] == null ? const Icon(Icons.store) : null,
+            backgroundImage: logo != null ? NetworkImage(logo) : null,
+            child: logo == null ? const Icon(Icons.store, size: 30) : null,
           ),
           const SizedBox(width: 20),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_f(data['merchantName'] ?? data['supermarketName']), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-                Text("المسؤول: ${_f(data['fullname'])} | النشاط: ${_f(data['businessType'])}", style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+                Text(_f(data['merchantName']), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                Text("نوع النشاط: ${_f(data['businessType'])}", style: TextStyle(color: Colors.grey.shade600, fontSize: 14)),
+                _buildStatusChip(data['status']),
               ],
             ),
           ),
@@ -91,13 +104,69 @@ class SellerDetailsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildFinancialCard(Map<String, dynamic> data) {
-    return _sectionCard("المؤشرات المالية", Icons.analytics_outlined, Colors.green, [
+  Widget _buildCommissionCard(Map<String, dynamic> data) {
+    return _sectionCard("نظام العمولة المعتمد", Icons.monetization_on_outlined, Colors.green, [
+      _staticRow("نوع العمولة", _translateCommissionType(data['commissionType'])),
       EditableInfoRow(label: "نسبة العمولة", value: _f(data['commissionRate']), field: "commissionRate", sellerId: sellerId, isNumber: true, suffix: " %"),
-      EditableInfoRow(label: "مديونية الكاش باك", value: _f(data['cashbackAccruedDebt']), field: "cashbackAccruedDebt", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
+      EditableInfoRow(label: "العمولة الثابتة", value: _f(data['fixedCommission']), field: "fixedCommission", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
     ]);
   }
 
+  Widget _buildDocumentsCard(BuildContext context, Map<String, dynamic> data) {
+    return _sectionCard("المستندات القانونية", Icons.description_outlined, Colors.redAccent, [
+      _imageRow(context, "السجل التجاري", data['crUrl']),
+      const Divider(),
+      _imageRow(context, "البطاقة الضريبية", data['tcUrl']),
+    ]);
+  }
+
+  // --- دوال مساعدة للواجهة ---
+
+  Widget _buildStatusChip(String? status) {
+    bool isActive = status == 'active';
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: isActive ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(isActive ? "حساب نشط" : "تحت المراجعة", 
+          style: TextStyle(color: isActive ? Colors.green : Colors.orange, fontSize: 12, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  String _translateCommissionType(dynamic type) {
+    if (type == "percentage") return "نسبة مئوية";
+    if (type == "fixed") return "مبلغ ثابت";
+    if (type == "both") return "نسبة + مبلغ ثابت";
+    return "غير محدد";
+  }
+
+  Widget _imageRow(BuildContext context, String label, String? url) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          url != null && url.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.image_search, color: Colors.blue),
+                  onPressed: () => _showFullImage(context, url),
+                )
+              : const Text("غير مرفق", style: TextStyle(color: Colors.red, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  void _showFullImage(BuildContext context, String url) {
+    showDialog(context: context, builder: (_) => Dialog(child: Image.network(url)));
+  }
+
+  // (بقية الدوال _sectionCard, _staticRow, _buildOperationsCard, _buildBankCard, _buildIdentityCard تبقى كما هي)
+  
   Widget _buildOperationsCard(Map<String, dynamic> data) {
     return _sectionCard("التشغيل والتوصيل", Icons.local_shipping_outlined, Colors.purple, [
       EditableInfoRow(label: "رسوم التوصيل", value: _f(data['deliveryFee']), field: "deliveryFee", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
@@ -109,14 +178,15 @@ class SellerDetailsPage extends StatelessWidget {
     return _sectionCard("بيانات البنك", Icons.account_balance_outlined, Colors.blue, [
       EditableInfoRow(label: "اسم البنك", value: _f(data['bankName']), field: "bankName", sellerId: sellerId),
       EditableInfoRow(label: "رقم الحساب", value: _f(data['bankAccountNumber']), field: "bankAccountNumber", sellerId: sellerId),
-      EditableInfoRow(label: "IBAN", value: _f(data['iban']), field: "iban", sellerId: sellerId),
     ]);
   }
 
   Widget _buildIdentityCard(Map<String, dynamic> data) {
-    return _sectionCard("الهوية", Icons.badge_outlined, Colors.orange, [
+    return _sectionCard("الهوية والتواصل", Icons.badge_outlined, Colors.orange, [
       _staticRow("رقم الهاتف", _f(data['phone'])),
+      _staticRow("هاتف إضافي", _f(data['additionalPhone'])),
       _staticRow("العنوان", _f(data['address'])),
+      _staticRow("البريد (Auth)", _f(data['email'])),
     ]);
   }
 
@@ -137,14 +207,13 @@ class SellerDetailsPage extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        Expanded(child: Text(value, textAlign: TextAlign.left, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
       ]),
     );
   }
 }
 
-// --- الـ Widget المفقود الذي سبب الخطأ تم تعريفه هنا ---
-
+// (كلاس EditableInfoRow يبقى كما هو في كودك الأصلي لأنه يتعامل مع التحديثات بشكل جيد)
 class EditableInfoRow extends StatelessWidget {
   final String label;
   final String value;
@@ -194,7 +263,7 @@ class EditableInfoRow extends StatelessWidget {
         title: Text("تعديل $label", style: const TextStyle(fontFamily: 'Cairo', fontSize: 16)),
         content: TextField(
           controller: controller,
-          keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+          keyboardType: isNumber ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
           decoration: InputDecoration(hintText: "أدخل القيمة الجديدة", suffixText: suffix),
         ),
         actions: [
@@ -203,7 +272,6 @@ class EditableInfoRow extends StatelessWidget {
             onPressed: () async {
               dynamic newValue = controller.text;
               if (isNumber) newValue = double.tryParse(controller.text) ?? 0.0;
-              
               await FirebaseFirestore.instance.collection('sellers').doc(sellerId).update({field: newValue});
               if (context.mounted) Navigator.pop(ctx);
             },
