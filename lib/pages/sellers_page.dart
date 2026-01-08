@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../widgets/product_selector_sheet.dart';
+import 'seller_details_page.dart'; // ✅ تأكد من إنشاء هذا الملف كما في الرد السابق
 
 class SellersPage extends StatefulWidget {
   const SellersPage({super.key});
@@ -12,6 +13,7 @@ class SellersPage extends StatefulWidget {
 class _SellersPageState extends State<SellersPage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final TextEditingController _commissionController = TextEditingController();
+  
   // قائمة المنتجات المؤقتة ستحتوي على الوحدات المختارة
   List<Map<String, dynamic>> _tempSelectedProducts = [];
 
@@ -33,7 +35,7 @@ class _SellersPageState extends State<SellersPage> with SingleTickerProviderStat
     return Scaffold(
       backgroundColor: const Color(0xFFF3F4F6),
       appBar: AppBar(
-        title: const Text("إدارة التجار", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("إدارة التجار المركزية", style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
         backgroundColor: const Color(0xFF1F2937),
         foregroundColor: Colors.white,
         bottom: TabBar(
@@ -70,17 +72,35 @@ class _SellersPageState extends State<SellersPage> with SingleTickerProviderStat
           itemBuilder: (context, index) {
             final data = docs[index].data() as Map<String, dynamic>;
             final id = docs[index].id;
+            
+            bool isPending = collectionName == "pendingSellers";
+
             return Card(
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              elevation: 1,
               child: ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: collectionName == "pendingSellers" ? Colors.orange : Colors.green,
-                  child: Icon(collectionName == "pendingSellers" ? Icons.hourglass_empty : Icons.check, color: Colors.white),
+                  backgroundColor: isPending ? Colors.orange : Colors.green,
+                  child: Icon(isPending ? Icons.hourglass_top : Icons.verified, color: Colors.white),
                 ),
-                title: Text(data['fullname'] ?? "تاجر جديد", style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(data['phone'] ?? ""),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => collectionName == "pendingSellers" ? _openReviewSheet(id, data) : _openEditDialog(id, data),
+                title: Text(data['supermarketName'] ?? data['fullname'] ?? "تاجر جديد", 
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+                subtitle: Text(data['phone'] ?? "بدون رقم هاتف"),
+                trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+                onTap: () {
+                  if (isPending) {
+                    // فتح ورقة المراجعة والاعتماد للتجار الجدد
+                    _openReviewSheet(id, data);
+                  } else {
+                    // ✅ الانتقال لصفحة التفاصيل الشاملة للتجار المعتمدين
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => SellerDetailsPage(sellerId: id, sellerData: data),
+                      ),
+                    );
+                  }
+                },
               ),
             );
           },
@@ -89,6 +109,7 @@ class _SellersPageState extends State<SellersPage> with SingleTickerProviderStat
     );
   }
 
+  // --- منطق اعتماد التاجر الجديد ---
   void _openReviewSheet(String docId, Map<String, dynamic> data) {
     _tempSelectedProducts = [];
     _commissionController.clear();
@@ -104,7 +125,7 @@ class _SellersPageState extends State<SellersPage> with SingleTickerProviderStat
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text("تفعيل التاجر: ${data['fullname']}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                Text("تفعيل التاجر: ${data['fullname']}", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
                 const SizedBox(height: 15),
                 TextField(
                   controller: _commissionController,
@@ -165,9 +186,8 @@ class _SellersPageState extends State<SellersPage> with SingleTickerProviderStat
         'approvedAt': FieldValue.serverTimestamp(),
       });
 
-      // 2. منطق التجميع (Grouping) ليطابق الـ HTML
+      // 2. منطق التجميع (Grouping) للعروض
       Map<String, Map<String, dynamic>> groupedOffers = {};
-
       for (var prod in _tempSelectedProducts) {
         String pId = prod['productId'];
         if (!groupedOffers.containsKey(pId)) {
@@ -181,7 +201,7 @@ class _SellersPageState extends State<SellersPage> with SingleTickerProviderStat
             'imageUrl': prod['imageUrl'],
             'status': 'active',
             'updatedAt': FieldValue.serverTimestamp(),
-            'units': [] // مصفوفة الوحدات التي يقرأها تطبيق الزبون
+            'units': []
           };
         }
         (groupedOffers[pId]!['units'] as List).add({
@@ -191,7 +211,6 @@ class _SellersPageState extends State<SellersPage> with SingleTickerProviderStat
         });
       }
 
-      // حفظ العروض المجمعة
       groupedOffers.forEach((pId, offerData) {
         final offerRef = FirebaseFirestore.instance.collection('productOffers').doc("${id}_$pId");
         batch.set(offerRef, offerData);
@@ -208,64 +227,6 @@ class _SellersPageState extends State<SellersPage> with SingleTickerProviderStat
     } catch (e) {
       debugPrint("Error: $e");
     }
-  }
-
-  void _openEditDialog(String id, Map<String, dynamic> data) {
-    _commissionController.text = (data['commissionRate'] ?? 0).toString();
-    String currentStatus = data['status'] ?? 'active';
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text("إدارة: ${data['fullname']}"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _commissionController,
-                decoration: const InputDecoration(labelText: "تعديل العمولة %", border: OutlineInputBorder()),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 15),
-              DropdownButtonFormField<String>(
-                value: currentStatus,
-                decoration: const InputDecoration(labelText: "حالة الحساب", border: OutlineInputBorder()),
-                items: const [
-                  DropdownMenuItem(value: 'active', child: Text("نشط")),
-                  DropdownMenuItem(value: 'inactive', child: Text("غير نشط (إيقاف)")),
-                ],
-                onChanged: (val) => setDialogState(() => currentStatus = val!),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
-            ElevatedButton(
-              onPressed: () async {
-                final batch = FirebaseFirestore.instance.batch();
-                final sellerRef = FirebaseFirestore.instance.collection('sellers').doc(id);
-
-                batch.update(sellerRef, {
-                  'commissionRate': double.tryParse(_commissionController.text) ?? 0,
-                  'status': currentStatus,
-                  'updatedAt': FieldValue.serverTimestamp(),
-                });
-
-                final offers = await FirebaseFirestore.instance.collection('productOffers').where('sellerId', isEqualTo: id).get();
-                for (var doc in offers.docs) {
-                  batch.update(doc.reference, {'status': currentStatus});
-                }
-
-                await batch.commit();
-                if (mounted) Navigator.pop(context);
-              },
-              child: const Text("حفظ التغييرات"),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 
