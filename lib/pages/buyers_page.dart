@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:html' as html; // للتحميل في المتصفح
+import 'dart:html' as html; 
 
 class BuyersPage extends StatefulWidget {
   const BuyersPage({super.key});
@@ -12,7 +12,7 @@ class BuyersPage extends StatefulWidget {
 }
 
 class _BuyersPageState extends State<BuyersPage> {
-  // نفس الـ API المستخدم في صفحة الإشعارات الترويجية
+  // الروابط الخاصة بالـ API لديك (نفس الموجودة في صفحة التسويق)
   final String SEND_API = 'https://o5d9ke4l82.execute-api.us-east-1.amazonaws.com/V1/m_nofiction';
 
   String _searchQuery = "";
@@ -25,7 +25,7 @@ class _BuyersPageState extends State<BuyersPage> {
     _calculateTotalPurchases();
   }
 
-  // حساب إجمالي المشتريات من الـ Orders
+  // حساب إجمالي مشتريات كل عميل
   Future<void> _calculateTotalPurchases() async {
     try {
       final ordersSnapshot = await FirebaseFirestore.instance.collection("orders").get();
@@ -41,27 +41,27 @@ class _BuyersPageState extends State<BuyersPage> {
       }
       if (mounted) setState(() => _customerPurchases = purchasesMap);
     } catch (e) {
-      debugPrint("Error: $e");
+      debugPrint("Error calculating purchases: $e");
     }
   }
 
-  // تصدير البيانات (حل مشكلة التحذير باستخدام Blob)
+  // تصدير البيانات (حل مشكلة التحذير مع الحفاظ على كل الحقول)
   void _exportToExcel() {
     if (_allDocs.isEmpty) return;
-    String csvData = "\uFEFF"; // BOM للعربية
-    csvData += "اسم العميل,الهاتف,الكاش باك,المندوب,إجمالي المشتريات,الحالة\n";
+    String csvData = "\uFEFF"; 
+    csvData += "الاسم,الهاتف,البريد,العنوان,المندوب,الكاش باك,المشتريات,الحالة\n";
 
     for (var doc in _allDocs) {
       final data = doc.data() as Map<String, dynamic>;
       final totalSpent = _customerPurchases[doc.id] ?? 0.0;
-      csvData += "${data['fullname'] ?? '—'},${data['phone'] ?? '—'},${data['cashback'] ?? 0},${data['repName'] ?? 'تسجيل مباشر'},${totalSpent.toStringAsFixed(2)},${data['status'] ?? 'نشط'}\n";
+      csvData += "${data['fullname'] ?? '—'},${data['phone'] ?? '—'},${data['email'] ?? '—'},${data['address'] ?? '—'},${data['repName'] ?? 'تسجيل مباشر'},${data['cashback'] ?? 0},${totalSpent.toStringAsFixed(2)},${data['status'] ?? 'نشط'}\n";
     }
 
     final bytes = utf8.encode(csvData);
     final blob = html.Blob([bytes], 'text/csv');
     final url = html.Url.createObjectUrlFromBlob(blob);
     html.AnchorElement(href: url)
-      ..setAttribute("download", "customers_${DateTime.now().millisecondsSinceEpoch}.csv")
+      ..setAttribute("download", "buyers_report_${DateTime.now().day}.csv")
       ..click();
     html.Url.revokeObjectUrl(url);
   }
@@ -75,14 +75,11 @@ class _BuyersPageState extends State<BuyersPage> {
         backgroundColor: const Color(0xFF1F2937),
         foregroundColor: Colors.white,
         actions: [
-          IconButton(icon: const Icon(Icons.file_download), onPressed: _exportToExcel),
+          IconButton(icon: const Icon(Icons.file_download), onPressed: _exportToExcel, tooltip: "تصدير"),
         ],
       ),
       body: Column(
-        children: [
-          _buildSearchBox(),
-          Expanded(child: _buildBuyersList()),
-        ],
+        children: [_buildSearchBox(), Expanded(child: _buildBuyersList())],
       ),
     );
   }
@@ -112,43 +109,41 @@ class _BuyersPageState extends State<BuyersPage> {
         _allDocs = snapshot.data!.docs;
         final filtered = _allDocs.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
-          return (data['fullname'] ?? "").toString().contains(_searchQuery) || (data['phone'] ?? "").toString().contains(_searchQuery);
+          final name = (data['fullname'] ?? "").toString().toLowerCase();
+          final phone = (data['phone'] ?? "").toString();
+          return name.contains(_searchQuery.toLowerCase()) || phone.contains(_searchQuery);
         }).toList();
 
         return ListView.builder(
           padding: const EdgeInsets.all(12),
           itemCount: filtered.length,
-          itemBuilder: (context, index) {
-            final id = filtered[index].id;
-            final data = filtered[index].data() as Map<String, dynamic>;
-            return _buildCustomerCard(id, data);
-          },
+          itemBuilder: (context, index) => _buildCustomerCard(filtered[index].id, filtered[index].data() as Map<String, dynamic>),
         );
       },
     );
   }
 
   Widget _buildCustomerCard(String id, Map<String, dynamic> customer) {
+    final totalSpent = _customerPurchases[id] ?? 0.0;
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       child: ListTile(
-        contentPadding: const EdgeInsets.all(15),
         title: Text(customer['fullname'] ?? "اسم غير متاح", style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("📞 ${customer['phone'] ?? '—'}"),
-            Text("💰 كاش باك: ${customer['cashback'] ?? 0} ج.م", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-            Text("👤 المندوب: ${customer['repName'] ?? 'تسجيل مباشر'}", style: const TextStyle(fontSize: 12, color: Colors.blueGrey)),
+            Text("📞 ${customer['phone'] ?? '—'} | 💰 كاش: ${customer['cashback'] ?? 0}"),
+            Text("👤 المندوب: ${customer['repName'] ?? 'تسجيل مباشر'}", style: const TextStyle(fontSize: 11, color: Colors.blueGrey)),
           ],
         ),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        trailing: const Icon(Icons.chevron_right),
         onTap: () => _showDetails(id, customer),
       ),
     );
   }
 
+  // --- المنبثقة الشاملة بكل الحقول ---
   void _showDetails(String id, Map<String, dynamic> customer) {
     showModalBottomSheet(
       context: context,
@@ -156,44 +151,55 @@ class _BuyersPageState extends State<BuyersPage> {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
       builder: (context) => Padding(
         padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text("تفاصيل العميل", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-            const Divider(),
-            _detailRow("UID:", id),
-            _detailRow("العنوان:", customer['address']),
-            _detailRow("تاريخ التسجيل:", _formatDate(customer['createdAt'])),
-            const SizedBox(height: 20),
-            
-            // زر إرسال إشعار (بنفس صيغة صفحة الـ Promo)
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.send),
-                label: const Text("إرسال إشعار لهذا العميل", style: TextStyle(fontFamily: 'Cairo')),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white),
-                onPressed: () => _sendNotificationDialog(id, customer['fullname'] ?? ""),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("تفاصيل العميل الكاملة", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+              const Divider(height: 30),
+              _fullDetailItem("UID", id),
+              _fullDetailItem("الاسم الكامل", customer['fullname']),
+              _fullDetailItem("رقم الهاتف", customer['phone']),
+              _fullDetailItem("البريد الإلكتروني", customer['email']),
+              _fullDetailItem("العنوان الحالي", customer['address']),
+              _fullDetailItem("الكاش باك", "${customer['cashback'] ?? 0} ج.م"),
+              _fullDetailItem("إجمالي المشتريات", "${(_customerPurchases[id] ?? 0).toStringAsFixed(2)} ج.م"),
+              _fullDetailItem("المندوب", customer['repName'] ?? "تسجيل مباشر"),
+              _fullDetailItem("تاريخ التسجيل", _formatDate(customer['createdAt'])),
+              _fullDetailItem("الحالة", customer['status'] ?? "نشط"),
+              
+              const SizedBox(height: 25),
+              
+              // زر إرسال الإشعار
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.send),
+                  label: const Text("إرسال إشعار خاص للعميل", style: TextStyle(fontFamily: 'Cairo')),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white, padding: const EdgeInsets.all(12)),
+                  onPressed: () => _sendNotificationDialog(id, customer),
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            
-            // زر تبديل الحالة
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed: () => _toggleStatus(id, customer['status']),
-                child: Text(customer['status'] == 'inactive' ? "تنشيط الحساب" : "تعطيل الحساب", style: const TextStyle(fontFamily: 'Cairo')),
+              const SizedBox(height: 10),
+              
+              // زر الحالة
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => _toggleStatus(id, customer['status']),
+                  child: Text(customer['status'] == 'inactive' ? "تنشيط الحساب" : "تعطيل الحساب", style: const TextStyle(fontFamily: 'Cairo')),
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // دايلوج الإرسال المبسط (بنفس الـ API والـ Sound)
-  void _sendNotificationDialog(String userId, String userName) {
+  // --- دايلوج الإرسال (مطابق لـ Payload صفحة التسويق) ---
+  void _sendNotificationDialog(String userId, Map<String, dynamic> customer) {
     final msgCtrl = TextEditingController();
     String selectedSound = 'default';
     bool isSending = false;
@@ -202,14 +208,14 @@ class _BuyersPageState extends State<BuyersPage> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text("إشعار إلى $userName", style: const TextStyle(fontSize: 16, fontFamily: 'Cairo')),
+          title: Text("إرسال إلى: ${customer['fullname']}", style: const TextStyle(fontSize: 15, fontFamily: 'Cairo')),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: msgCtrl,
                 maxLines: 3,
-                decoration: const InputDecoration(hintText: "اكتب نص الرسالة هنا...", border: OutlineInputBorder()),
+                decoration: const InputDecoration(hintText: "نص الرسالة...", border: OutlineInputBorder()),
               ),
               const SizedBox(height: 10),
               DropdownButton<String>(
@@ -236,20 +242,23 @@ class _BuyersPageState extends State<BuyersPage> {
                     Uri.parse(SEND_API),
                     headers: {'Content-Type': 'application/json'},
                     body: json.encode({
-                      'topic': userId, // نرسل لـ UID الخاص بالعميل كـ Topic
-                      'title': "تنبيه من الإدارة 📢",
+                      // هنا التعديل: نرسل الـ UID كتوبيك، أو إذا كان لديك حقل ARN استخدمه
+                      'topic': userId, 
+                      'title': "تنبيه من أكسب 💰",
                       'message': msgCtrl.text,
                       'sound': selectedSound,
                       'data': {
                         'screen': 'Home',
                         'click_action': 'FLUTTER_NOTIFICATION_CLICK',
+                        'image': "", // صورة فارغة
                       }
                     }),
                   );
                   Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(response.statusCode == 200 ? "تم الإرسال" : "فشل الإرسال")));
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(response.statusCode == 200 ? "تم الإرسال بنجاح" : "فشل الإرسال: ${response.body}")));
                 } catch (e) {
                   Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("خطأ في الاتصال")));
                 }
               },
               child: isSending ? const CircularProgressIndicator() : const Text("إرسال"),
@@ -260,10 +269,16 @@ class _BuyersPageState extends State<BuyersPage> {
     );
   }
 
-  Widget _detailRow(String label, dynamic value) {
+  Widget _fullDetailItem(String label, dynamic value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(children: [Text(label, style: const TextStyle(fontWeight: FontWeight.bold)), const SizedBox(width: 10), Expanded(child: Text("${value ?? '—'}"))]),
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 100, child: Text("$label:", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey, fontSize: 13))),
+          Expanded(child: Text("${value ?? '—'}", style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+        ],
+      ),
     );
   }
 
