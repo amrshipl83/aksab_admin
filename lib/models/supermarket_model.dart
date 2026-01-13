@@ -14,6 +14,13 @@ class SupermarketModel {
   final bool? deliveryActive;
   final String? status;
   final String? ownerId;
+  
+  // --- الحقول الجديدة التي أضفناها ---
+  final String? storeType;    // نوع النشاط (سوبر ماركت، مطعم...)
+  final String? storeIcon;    // الأيقونة المختارة
+  final String? ownerPhone;   // هاتف المالك الأساسي للتواصل الإداري
+  // --------------------------------
+
   final DateTime? requestDate;
   final DateTime? approvalDate;
   final DateTime? lastUpdated;
@@ -33,13 +40,15 @@ class SupermarketModel {
     this.deliveryActive,
     this.status,
     this.ownerId,
+    this.storeType,      // إضافة هنا
+    this.storeIcon,      // إضافة هنا
+    this.ownerPhone,     // إضافة هنا
     this.requestDate,
     this.approvalDate,
     this.lastUpdated,
     this.location,
   });
 
-  // لتحويل بيانات Firebase إلى كائن فلاتر (يدعم كلا المجموعتين)
   factory SupermarketModel.fromFirestore(Map<String, dynamic> data, String documentId) {
     return SupermarketModel(
       id: documentId,
@@ -55,9 +64,14 @@ class SupermarketModel {
       deliveryActive: data['deliveryActive'],
       status: data['status']?.toString(),
       ownerId: data['ownerId']?.toString(),
-      location: data['location'] is Map ? data['location'] as Map<String, dynamic> : null,
       
-      // التعامل مع التواريخ المختلفة
+      // --- سحب الحقول الجديدة من Firestore ---
+      storeType: data['storeType']?.toString(),
+      storeIcon: data['storeIcon']?.toString(),
+      ownerPhone: data['ownerPhone']?.toString(),
+      // ---------------------------------------
+
+      location: data['location'] is Map ? data['location'] as Map<String, dynamic> : null,
       requestDate: (data['requestDate'] as Timestamp?)?.toDate(),
       approvalDate: (data['approvalDate'] as Timestamp?)?.toDate(),
       lastUpdated: (data['lastUpdated'] as Timestamp? ?? data['updatedAt'] as Timestamp?)?.toDate(),
