@@ -1,5 +1,3 @@
-// lib/screens/marketing/tabs/consumer_banners_tab.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:http/http.dart' as http;
@@ -28,7 +26,6 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
   final String cloudinaryUrl = 'https://api.cloudinary.com/v1_1/dgmmx6jbu/image/upload';
   final String uploadPreset = 'commerce';
 
-  // --- دالة رفع الصور ---
   Future<String?> _uploadToCloudinary() async {
     if (_selectedImage == null) return null;
     try {
@@ -41,20 +38,21 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
       var jsonRes = jsonDecode(utf8.decode(responseData));
       return jsonRes['secure_url'];
     } catch (e) {
+      debugPrint("Cloudinary Error: $e");
       return null;
     }
   }
 
-  // --- دالة الحفظ ---
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate() || _selectedImage == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("أكمل البيانات والصورة")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("برجاء إكمال البيانات وصورة البانر")));
       return;
     }
     setState(() => _isUploading = true);
     try {
       String? imageUrl = await _uploadToCloudinary();
       if (imageUrl != null) {
+        // 🎯 يتم الإرسال لمجموعة البانرات الأساسية
         await FirebaseFirestore.instance.collection('consumerBanners').add({
           'name': _nameController.text,
           'imageUrl': imageUrl,
@@ -67,8 +65,10 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
           'createdAt': FieldValue.serverTimestamp(),
         });
         _resetForm();
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم الرفع بنجاح")));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم رفع البانر بنجاح!")));
       }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ أثناء الحفظ: $e")));
     } finally {
       setState(() => _isUploading = false);
     }
@@ -77,7 +77,13 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
   void _resetForm() {
     _nameController.clear();
     _orderController.text = "0";
-    setState(() { _selectedImage = null; _linkType = 'NONE'; _targetId = null; });
+    setState(() {
+      _selectedImage = null;
+      _linkType = 'NONE';
+      _targetId = null;
+      _targetAudience = 'general';
+      _selectedOwnerId = null;
+    });
   }
 
   @override
@@ -88,9 +94,10 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
         children: [
           _buildFormCard(),
           const SizedBox(height: 25),
-          const Text("البانرات الحالية", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          const Divider(),
+          const Text("البانرات الحالية للمستهلك", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
           const SizedBox(height: 15),
-          _buildBannersList(), // ✅ الآن أصبحت معرفة بالأسفل
+          _buildBannersList(),
         ],
       ),
     );
@@ -99,30 +106,58 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
   Widget _buildFormCard() {
     return Card(
       elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextFormField(controller: _nameController, decoration: const InputDecoration(labelText: "اسم البانر")),
+              const Text("إضافة بانر جديد", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blue)),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: "اسم البانر داخلياً", border: OutlineInputBorder()),
+                validator: (v) => v!.isEmpty ? "مطلوب" : null,
+              ),
               const SizedBox(height: 15),
-              _buildImagePicker(), // ✅ الآن أصبحت معرفة بالأسفل
+              _buildImagePicker(),
               const SizedBox(height: 15),
               DropdownButtonFormField<String>(
                 value: _linkType,
+                decoration: const InputDecoration(labelText: "نوع الوجهة (أين يفتح؟)", border: OutlineInputBorder()),
                 items: const [
-                  DropdownMenuItem(value: 'NONE', child: Text("بدون وجهة")),
-                  DropdownMenuItem(value: 'CATEGORY', child: Text("قسم رئيسي")),
-                  DropdownMenuItem(value: 'SUB_CATEGORY', child: Text("قسم فرعي")),
-                  DropdownMenuItem(value: 'RETAILER', child: Text("سوبر ماركت")),
-                  DropdownMenuItem(value: 'SELLER', child: Text("تاجر")),
+                  DropdownMenuItem(value: 'NONE', child: Text("بدون وجهة (صورة فقط)")),
+                  DropdownMenuItem(value: 'CATEGORY', child: Text("فتح قسم رئيسي")),
+                  DropdownMenuItem(value: 'SUB_CATEGORY', child: Text("فتح قسم فرعي")),
+                  DropdownMenuItem(value: 'RETAILER', child: Text("سوبر ماركت (توصيل)")),
+                  DropdownMenuItem(value: 'SELLER', child: Text("تاجر (ملابس/أخرى)")),
                 ],
                 onChanged: (v) => setState(() { _linkType = v!; _targetId = null; }),
               ),
-              if (_linkType != 'NONE') _buildTargetDropdown(),
+              if (_linkType != 'NONE') ...[
+                const SizedBox(height: 15),
+                _buildTargetDropdown(),
+              ],
               const SizedBox(height: 20),
-              ElevatedButton(onPressed: _isUploading ? null : _submitForm, child: Text(_isUploading ? "جارِ الرفع..." : "رفع الآن")),
+              TextFormField(
+                controller: _orderController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: "ترتيب الظهور", border: OutlineInputBorder()),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: _isUploading ? null : _submitForm,
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
+                  child: _isUploading 
+                    ? const CircularProgressIndicator(color: Colors.white) 
+                    : const Text("حفظ البانر", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
             ],
           ),
         ),
@@ -130,7 +165,56 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
     );
   }
 
-  // 1️⃣ دالة اختيار الصور (اللي كانت ناقصة)
+  Widget _buildTargetDropdown() {
+    String collection;
+    String nameField = 'name';
+
+    // 🎯 تحديد المجموعة والحقل بناءً على نوع الرابط
+    switch (_linkType) {
+      case 'CATEGORY':
+        collection = 'mainCategory';
+        break;
+      case 'SUB_CATEGORY':
+        collection = 'subCategory';
+        break;
+      case 'RETAILER':
+        collection = 'deliverySupermarkets';
+        nameField = 'supermarketName';
+        break;
+      case 'SELLER':
+        collection = 'sellers';
+        nameField = 'merchantName'; // تم التعديل بناءً على طلبك
+        break;
+      default:
+        return const SizedBox.shrink();
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection(collection).snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const LinearProgressIndicator();
+        
+        var docs = snapshot.data!.docs;
+        if (docs.isEmpty) return Text("لا توجد بيانات في $collection");
+
+        return DropdownButtonFormField<String>(
+          value: _targetId,
+          hint: const Text("اختر الوجهة المحددة"),
+          decoration: const InputDecoration(border: OutlineInputBorder(), filled: true, fillColor: Color(0xFFF0F7FF)),
+          items: docs.map((doc) {
+            Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+            return DropdownMenuItem(
+              value: doc.id,
+              child: Text(data[nameField] ?? 'بدون اسم (${doc.id})'),
+            );
+          }).toList(),
+          onChanged: (v) => setState(() => _targetId = v),
+          validator: (v) => v == null ? "مطلوب" : null,
+        );
+      },
+    );
+  }
+
   Widget _buildImagePicker() {
     return InkWell(
       onTap: () async {
@@ -140,20 +224,23 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
       child: Container(
         height: 150,
         width: double.infinity,
-        decoration: BoxDecoration(border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(8)),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey),
+          borderRadius: BorderRadius.circular(8),
+          color: Colors.grey[50]
+        ),
         child: _selectedImage == null
-            ? const Icon(Icons.add_a_photo, size: 50, color: Colors.grey)
+            ? const Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.add_photo_alternate, size: 40, color: Colors.grey), Text("اختر صورة البانر")])
             : Image.network(_selectedImage!.path, fit: BoxFit.contain),
       ),
     );
   }
 
-  // 2️⃣ دالة عرض القائمة (اللي كانت ناقصة)
   Widget _buildBannersList() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('consumerBanners').orderBy('order').snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const CircularProgressIndicator();
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         return ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -162,10 +249,18 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
             var doc = snapshot.data!.docs[index];
             var data = doc.data() as Map<String, dynamic>;
             return Card(
+              margin: const EdgeInsets.only(bottom: 10),
               child: ListTile(
-                leading: Image.network(data['imageUrl'], width: 50),
-                title: Text(data['name'] ?? ''),
-                trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => doc.reference.delete()),
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: Image.network(data['imageUrl'], width: 60, height: 60, fit: BoxFit.cover),
+                ),
+                title: Text(data['name'] ?? 'بدون اسم'),
+                subtitle: Text("الوجهة: ${data['linkType']}"),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red),
+                  onPressed: () => _deleteBanner(doc.id),
+                ),
               ),
             );
           },
@@ -174,22 +269,21 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
     );
   }
 
-  // دالة جلب الوجهات
-  Widget _buildTargetDropdown() {
-    String collection = _linkType == 'CATEGORY' ? 'mainCategory' : (_linkType == 'SUB_CATEGORY' ? 'subCategory' : (_linkType == 'RETAILER' ? 'deliverySupermarkets' : 'sellers'));
-    String nameField = (_linkType == 'RETAILER') ? 'supermarketName' : (_linkType == 'SELLER' ? 'fullname' : 'name');
-
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection(collection).snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) return const LinearProgressIndicator();
-        return DropdownButtonFormField<String>(
-          value: _targetId,
-          items: snapshot.data!.docs.map((doc) => DropdownMenuItem(value: doc.id, child: Text(doc.get(nameField) ?? 'بدون اسم'))).toList(),
-          onChanged: (v) => setState(() => _targetId = v),
-        );
-      },
+  void _deleteBanner(String id) async {
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("حذف البانر؟"),
+        content: const Text("هل أنت متأكد من حذف هذا البانر نهائياً؟"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("إلغاء")),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text("حذف", style: TextStyle(color: Colors.red))),
+        ],
+      ),
     );
+    if (confirm == true) {
+      await FirebaseFirestore.instance.collection('consumerBanners').doc(id).delete();
+    }
   }
 }
 
