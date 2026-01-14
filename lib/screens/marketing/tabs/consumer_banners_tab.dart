@@ -20,18 +20,15 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
 
   String _targetAudience = 'general';
   String? _selectedOwnerId;
-
-  // الوجهة الذكية
   String _linkType = 'NONE';
-  String? _targetId; // هذا سيحمل الـ ID الخاص بالوجهة (المعرف)
-
+  String? _targetId;
   XFile? _selectedImage;
   bool _isUploading = false;
 
   final String cloudinaryUrl = 'https://api.cloudinary.com/v1_1/dgmmx6jbu/image/upload';
   final String uploadPreset = 'commerce';
 
-  // --- دالة رفع الصور كما هي ---
+  // --- دالة رفع الصور ---
   Future<String?> _uploadToCloudinary() async {
     if (_selectedImage == null) return null;
     try {
@@ -48,12 +45,12 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
     }
   }
 
+  // --- دالة الحفظ ---
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate() || _selectedImage == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("أكمل البيانات والصورة")));
       return;
     }
-
     setState(() => _isUploading = true);
     try {
       String? imageUrl = await _uploadToCloudinary();
@@ -61,8 +58,8 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
         await FirebaseFirestore.instance.collection('consumerBanners').add({
           'name': _nameController.text,
           'imageUrl': imageUrl,
-          'linkType': _linkType, // نوع الوجهة (SELLER, RETAILER, CATEGORY...)
-          'targetId': _targetId ?? '', // المعرف (ID)
+          'linkType': _linkType,
+          'targetId': _targetId ?? '',
           'targetAudience': _targetAudience,
           'ownerId': _targetAudience == 'dealer' ? _selectedOwnerId : '',
           'order': int.tryParse(_orderController.text) ?? 0,
@@ -80,11 +77,7 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
   void _resetForm() {
     _nameController.clear();
     _orderController.text = "0";
-    setState(() {
-      _selectedImage = null;
-      _linkType = 'NONE';
-      _targetId = null;
-    });
+    setState(() { _selectedImage = null; _linkType = 'NONE'; _targetId = null; });
   }
 
   @override
@@ -95,7 +88,9 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
         children: [
           _buildFormCard(),
           const SizedBox(height: 25),
-          _buildBannersList(),
+          const Text("البانرات الحالية", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          const SizedBox(height: 15),
+          _buildBannersList(), // ✅ الآن أصبحت معرفة بالأسفل
         ],
       ),
     );
@@ -104,54 +99,30 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
   Widget _buildFormCard() {
     return Card(
       elevation: 3,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
           child: Column(
             children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: "اسم البانر", border: OutlineInputBorder()),
-                validator: (v) => v!.isEmpty ? "مطلوب" : null,
-              ),
+              TextFormField(controller: _nameController, decoration: const InputDecoration(labelText: "اسم البانر")),
               const SizedBox(height: 15),
-              _buildImagePicker(),
+              _buildImagePicker(), // ✅ الآن أصبحت معرفة بالأسفل
               const SizedBox(height: 15),
-              
-              // 🎯Dropdown اختيار نوع الوجهة المطور
               DropdownButtonFormField<String>(
                 value: _linkType,
-                decoration: const InputDecoration(labelText: "ماذا يفتح البانر؟", border: OutlineInputBorder()),
                 items: const [
-                  DropdownMenuItem(value: 'NONE', child: Text("صورة فقط")),
-                  DropdownMenuItem(value: 'CATEGORY', child: Text("قسم رئيسي (مثل: ملابس)")),
-                  DropdownMenuItem(value: 'SUB_CATEGORY', child: Text("قسم فرعي (مثل: قمصان)")),
-                  DropdownMenuItem(value: 'RETAILER', child: Text("سوبر ماركت (توصيل)")),
-                  DropdownMenuItem(value: 'SELLER', child: Text("تاجر محدد (مثل: محل ملابس)")),
+                  DropdownMenuItem(value: 'NONE', child: Text("بدون وجهة")),
+                  DropdownMenuItem(value: 'CATEGORY', child: Text("قسم رئيسي")),
+                  DropdownMenuItem(value: 'SUB_CATEGORY', child: Text("قسم فرعي")),
+                  DropdownMenuItem(value: 'RETAILER', child: Text("سوبر ماركت")),
+                  DropdownMenuItem(value: 'SELLER', child: Text("تاجر")),
                 ],
                 onChanged: (v) => setState(() { _linkType = v!; _targetId = null; }),
               ),
-
-              if (_linkType != 'NONE') ...[
-                const SizedBox(height: 15),
-                _buildTargetDropdown(), // المحرك الذي يجلب البيانات من المجموعات
-              ],
-
-              const SizedBox(height: 15),
-              // ترتيب الظهور وزر الرفع...
-              TextFormField(
-                controller: _orderController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: "ترتيب الظهور", border: OutlineInputBorder()),
-              ),
+              if (_linkType != 'NONE') _buildTargetDropdown(),
               const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _isUploading ? null : _submitForm,
-                style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50)),
-                child: _isUploading ? const CircularProgressIndicator() : const Text("رفع البانر الذكي"),
-              ),
+              ElevatedButton(onPressed: _isUploading ? null : _submitForm, child: Text(_isUploading ? "جارِ الرفع..." : "رفع الآن")),
             ],
           ),
         ),
@@ -159,54 +130,66 @@ class _ConsumerBannersTabState extends State<ConsumerBannersTab> {
     );
   }
 
-  // 🎯 المحرك الذكي لجلب الأسماء والمعرفات من المجموعات
-  Widget _buildTargetDropdown() {
-    String collectionPath;
-    String nameField = 'name';
+  // 1️⃣ دالة اختيار الصور (اللي كانت ناقصة)
+  Widget _buildImagePicker() {
+    return InkWell(
+      onTap: () async {
+        final img = await ImagePicker().pickImage(source: ImageSource.gallery);
+        if (img != null) setState(() => _selectedImage = img);
+      },
+      child: Container(
+        height: 150,
+        width: double.infinity,
+        decoration: BoxDecoration(border: Border.all(color: Colors.grey), borderRadius: BorderRadius.circular(8)),
+        child: _selectedImage == null
+            ? const Icon(Icons.add_a_photo, size: 50, color: Colors.grey)
+            : Image.network(_selectedImage!.path, fit: BoxFit.contain),
+      ),
+    );
+  }
 
-    // تحديد المجموعة والحقل المطلوب بناءً على النوع
-    switch (_linkType) {
-      case 'CATEGORY':
-        collectionPath = 'mainCategory';
-        break;
-      case 'SUB_CATEGORY':
-        collectionPath = 'subCategory';
-        break;
-      case 'RETAILER':
-        collectionPath = 'deliverySupermarkets';
-        nameField = 'supermarketName'; // الحقل اللي بتحبه في السوبر ماركت
-        break;
-      case 'SELLER':
-        collectionPath = 'sellers';
-        nameField = 'fullname'; // أو 'storeName' حسب المجموعة عندك
-        break;
-      default:
-        return const SizedBox.shrink();
-    }
-
+  // 2️⃣ دالة عرض القائمة (اللي كانت ناقصة)
+  Widget _buildBannersList() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection(collectionPath).snapshots(),
+      stream: FirebaseFirestore.instance.collection('consumerBanners').orderBy('order').snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData) return const LinearProgressIndicator();
-        
-        return DropdownButtonFormField<String>(
-          value: _targetId,
-          hint: Text("اختر من قائمة $collectionPath"),
-          decoration: const InputDecoration(border: OutlineInputBorder(), filled: true, fillColor: Color(0xFFF0F7FF)),
-          items: snapshot.data!.docs.map((doc) {
-            Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-            return DropdownMenuItem(
-              value: doc.id, // نرسل الـ ID
-              child: Text(data[nameField] ?? 'بدون اسم'), // نعرض الاسم
+        if (!snapshot.hasData) return const CircularProgressIndicator();
+        return ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: snapshot.data!.docs.length,
+          itemBuilder: (context, index) {
+            var doc = snapshot.data!.docs[index];
+            var data = doc.data() as Map<String, dynamic>;
+            return Card(
+              child: ListTile(
+                leading: Image.network(data['imageUrl'], width: 50),
+                title: Text(data['name'] ?? ''),
+                trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => doc.reference.delete()),
+              ),
             );
-          }).toList(),
-          onChanged: (v) => setState(() => _targetId = v),
-          validator: (v) => v == null ? "برجاء الاختيار" : null,
+          },
         );
       },
     );
   }
 
-  // ... (باقي ويدجت الـ ImagePicker والـ List كما هي)
+  // دالة جلب الوجهات
+  Widget _buildTargetDropdown() {
+    String collection = _linkType == 'CATEGORY' ? 'mainCategory' : (_linkType == 'SUB_CATEGORY' ? 'subCategory' : (_linkType == 'RETAILER' ? 'deliverySupermarkets' : 'sellers'));
+    String nameField = (_linkType == 'RETAILER') ? 'supermarketName' : (_linkType == 'SELLER' ? 'fullname' : 'name');
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance.collection(collection).snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const LinearProgressIndicator();
+        return DropdownButtonFormField<String>(
+          value: _targetId,
+          items: snapshot.data!.docs.map((doc) => DropdownMenuItem(value: doc.id, child: Text(doc.get(nameField) ?? 'بدون اسم'))).toList(),
+          onChanged: (v) => setState(() => _targetId = v),
+        );
+      },
+    );
+  }
 }
 
