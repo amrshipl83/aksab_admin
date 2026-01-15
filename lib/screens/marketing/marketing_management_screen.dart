@@ -3,7 +3,9 @@ import 'cashback_management_screen.dart';
 import 'smart_banners_management_screen.dart';
 import 'points_settings_screen.dart';
 // ✅ الربط بملف الإشعارات الجديد
-import 'promo_notifications_screen.dart'; 
+import 'promo_notifications_screen.dart';
+// 🎯 تم إضافة استيراد صفحة المساعد الذكي (الأسئلة الثابتة)
+import 'faq.dart'; 
 
 class MarketingManagementScreen extends StatelessWidget {
   const MarketingManagementScreen({super.key});
@@ -111,7 +113,12 @@ class MarketingManagementScreen extends StatelessWidget {
                     icon: Icons.psychology,
                     color: Colors.teal,
                     onTap: () {
-                      // سيتم ربطها لاحقاً
+                      // ✅ تم تفعيل الربط بصفحة المساعد الذكي (الأسئلة الثابتة)
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const AdminFAQScreen()),
+                      );
                     },
                   ),
                 ],
