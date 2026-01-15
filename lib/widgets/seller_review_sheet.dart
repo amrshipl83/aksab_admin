@@ -17,74 +17,69 @@ class _SellerReviewSheetState extends State<SellerReviewSheet> {
   final TextEditingController _commissionRateController = TextEditingController();
   final TextEditingController _fixedCommissionController = TextEditingController();
 
-  String _commissionType = "percentage"; // percentage, fixed, or both
+  String _commissionType = "percentage"; 
   List<Map<String, dynamic>> _tempProducts = [];
   bool _isProcessing = false;
 
   String _f(dynamic val) => (val == null || val.toString().isEmpty) ? "غير متوفر" : val.toString();
 
-  /// دالة الموافقة المطابقة لمنطق الويب
+  /// الدالة المصححة لمنع الـ null في قاعدة البيانات
   Future<void> _approve() async {
     setState(() => _isProcessing = true);
     try {
       final batch = FirebaseFirestore.instance.batch();
       final String sellerId = widget.docId;
 
-      // مراجع المستندات
       final sellerRef = FirebaseFirestore.instance.collection('sellers').doc(sellerId);
       final pendingRef = FirebaseFirestore.instance.collection('pendingSellers').doc(sellerId);
-      final notificationRef = FirebaseFirestore.instance.collection('notifications').doc();
 
-      // تجهيز بيانات العمولة والرسوم (باستخدام نفس مسميات كود الويب)
+      // البيانات المالية
       double rate = double.tryParse(_commissionRateController.text) ?? 0;
       double monthlyFee = double.tryParse(_fixedCommissionController.text) ?? 0;
 
-      // 1. نقل التاجر إلى مجموعة المعتمدين 'sellers'
+      // 1. تحديث بيانات التاجر في sellers
       batch.set(sellerRef, {
         ...widget.data,
         'status': 'active',
         'commissionType': _commissionType,
-        'commissionRate': rate,      // مطابق للويب
-        'monthlyFee': monthlyFee,    // مطابق للويب
+        'commissionRate': rate,
+        'monthlyFee': monthlyFee,
         'approvedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
         'isVerified': true,
       });
 
-      // 2. توزيع العروض على مجموعة 'productOffers' (نفس منطق الويب)
+      // 2. توزيع العروض (المنطق الذي يمنع الـ null)
       for (var offer in _tempProducts) {
-        // معرف العرض: sellerId_productId لضمان عدم التكرار
-        final String offerId = "${sellerId}_${offer['productId']}";
+        final String pId = offer['productId'] ?? '';
+        if (pId.isEmpty) continue;
+
+        final String offerId = "${sellerId}_$pId";
         final offerRef = FirebaseFirestore.instance.collection('productOffers').doc(offerId);
 
+        // كتابة العرض مع التأكد من وجود كل الحقول المطلوبة كما في صورتك
         batch.set(offerRef, {
           'sellerId': sellerId,
           'sellerName': widget.data['merchantName'] ?? widget.data['fullname'] ?? "تاجر",
-          'productId': offer['productId'],
-          'productName': offer['productName'],
-          'mainCategoryId': offer['mainCategoryId'],
-          'mainCategoryName': offer['mainCategoryName'],
-          'subCategoryId': offer['subCategoryId'],
-          'subCategoryName': offer['subCategoryName'],
-          'status': 'active',
-          'updatedAt': FieldValue.serverTimestamp(),
-          'units': offer['units'], // مصفوفة الوحدات والأسعار والكميات
+          'productId': pId,
+          'productName': offer['productName'] ?? 'بدون اسم',
+          'mainCategoryId': offer['mainCategoryId'] ?? '',
+          'mainCategoryName': offer['mainCategoryName'] ?? '',
+          'subCategoryId': offer['subCategoryId'] ?? '',
+          'subCategoryName': offer['subCategoryName'] ?? '',
+          'units': offer['units'] ?? [], // مصفوفة الوحدات والأسعار
           'imageUrl': offer['imageUrl'] ?? '',
+          'status': 'active',
+          'deliveryZones': [], // حقول فارغة افتراضية لتجنب الخطأ في تطبيق الزبون
+          'deliveryAreas': [],
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
         });
       }
 
-      // 3. إضافة إشعار ترحيبي للتاجر
-      batch.set(notificationRef, {
-        'userId': sellerId,
-        'title': 'تم تفعيل حسابك بنجاح',
-        'message': 'مبروك! يمكنك الآن استقبال الطلبات وإدارة عروضك من خلال التطبيق.',
-        'createdAt': FieldValue.serverTimestamp(),
-        'type': 'activation'
-      });
-
-      // 4. حذف طلب التسجيل من مجموعة 'pendingSellers'
+      // 3. حذف الطلب المعلق
       batch.delete(pendingRef);
 
-      // تنفيذ جميع العمليات معاً
       await batch.commit();
 
       if (mounted) {
@@ -97,7 +92,7 @@ class _SellerReviewSheetState extends State<SellerReviewSheet> {
       setState(() => _isProcessing = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('حدث خطأ أثناء التفعيل: $e')),
+          SnackBar(content: Text('خطأ في الحفظ: $e')),
         );
       }
     }
@@ -115,32 +110,29 @@ class _SellerReviewSheetState extends State<SellerReviewSheet> {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            // 1. عرض الشعار
-            if (widget.data['logoUrl'] != null || widget.data['merchantLogoUrl'] != null)
+            // الشعار
+            if (widget.data['logoUrl'] != null)
               Center(
                 child: CircleAvatar(
                   radius: 50,
-                  backgroundImage: NetworkImage(widget.data['logoUrl'] ?? widget.data['merchantLogoUrl']),
+                  backgroundImage: NetworkImage(widget.data['logoUrl']),
                 ),
               ),
             const SizedBox(height: 20),
 
-            // 2. البيانات الأساسية
             _buildCard("البيانات الأساسية", [
               _row("الاسم التجاري", widget.data['merchantName']),
               _row("نوع النشاط", widget.data['businessType']),
               _row("اسم المسؤول", widget.data['fullname']),
               _row("رقم الهاتف", widget.data['phone']),
-              _row("العنوان", widget.data['address'] ?? widget.data['fullAddress']),
+              _row("العنوان", widget.data['address']),
             ]),
 
-            // 3. الوثائق
             _buildCard("الوثائق والمستندات", [
               _buildImagePreview("السجل التجاري", widget.data['crUrl']),
               _buildImagePreview("البطاقة الضريبية", widget.data['tcUrl']),
             ]),
 
-            // 4. إعدادات العمولة
             _buildCard("إعدادات العمولة", [
               DropdownButtonFormField<String>(
                 value: _commissionType,
@@ -170,19 +162,21 @@ class _SellerReviewSheetState extends State<SellerReviewSheet> {
 
             const Divider(height: 40),
 
-            // 5. منسدلة العروض والمنتجات
-            _buildCard("إضافة العروض الأولية", [
-              ProductSelectorSheet(onProductAdded: (p) => setState(() => _tempProducts.add(p))),
+            // إضافة العروض من خلال الودجت الثانية
+            _buildCard("إضافة العروض", [
+              ProductSelectorSheet(onProductAdded: (p) {
+                setState(() => _tempProducts.add(p));
+              }),
               if (_tempProducts.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.only(top: 8.0),
-                  child: Text("تم اختيار ${_tempProducts.length} عرض", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text("عدد المنتجات المضافة: ${_tempProducts.length}", 
+                    style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
                 ),
             ]),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 30),
 
-            // زر التفعيل النهائي
             SizedBox(
               width: double.infinity,
               height: 55,
@@ -190,8 +184,8 @@ class _SellerReviewSheetState extends State<SellerReviewSheet> {
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
                 onPressed: _isProcessing ? null : _approve,
                 child: Text(
-                  _isProcessing ? "جاري المعالجة..." : "تفعيل الحساب ونقل البيانات",
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                  _isProcessing ? "جاري الحفظ..." : "تفعيل الحساب ونقل البيانات",
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -201,8 +195,7 @@ class _SellerReviewSheetState extends State<SellerReviewSheet> {
     );
   }
 
-  // --- الودجت المساعدة (Helper Widgets) ---
-
+  // --- الودجت المساعدة ---
   Widget _buildImagePreview(String label, String? url) {
     if (url == null || url.isEmpty) return _row(label, "غير متوفر");
     return Padding(
@@ -213,7 +206,7 @@ class _SellerReviewSheetState extends State<SellerReviewSheet> {
           Text("$label:", style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 5),
           GestureDetector(
-            onTap: () => _showFullScreenImage(url),
+            onTap: () => showDialog(context: context, builder: (_) => Dialog(child: Image.network(url))),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: Image.network(url, height: 150, width: double.infinity, fit: BoxFit.cover),
@@ -224,20 +217,15 @@ class _SellerReviewSheetState extends State<SellerReviewSheet> {
     );
   }
 
-  void _showFullScreenImage(String url) {
-    showDialog(context: context, builder: (_) => Dialog(child: Image.network(url)));
-  }
-
   Widget _buildCard(String title, List<Widget> children) {
     return Card(
       margin: const EdgeInsets.only(bottom: 15),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(15),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey, fontSize: 15)),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey)),
             const Divider(),
             ...children
           ],
@@ -249,12 +237,10 @@ class _SellerReviewSheetState extends State<SellerReviewSheet> {
   Widget _row(String label, dynamic val) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          Text("$label: ", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-          Expanded(child: Text(_f(val), style: const TextStyle(fontSize: 13))),
-        ],
-      ),
+      child: Row(children: [
+        Text("$label: ", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        Expanded(child: Text(_f(val), style: const TextStyle(fontSize: 13))),
+      ]),
     );
   }
 }
