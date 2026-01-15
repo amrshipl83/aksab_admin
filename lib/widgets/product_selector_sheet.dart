@@ -1,3 +1,4 @@
+// lib/widgets/product_selector_sheet.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -11,9 +12,11 @@ class ProductSelectorSheet extends StatefulWidget {
 
 class _ProductSelectorSheetState extends State<ProductSelectorSheet> {
   String? selectedMainCatId;
+  String? selectedMainCatName; // جديد لحفظ الاسم
   String? selectedSubCatId;
+  String? selectedSubCatName; // جديد لحفظ الاسم
   Map<String, dynamic>? selectedProduct;
-  String? selectedUnit; // جديد: لاختيار الوحدة
+  String? selectedUnit;
 
   final TextEditingController _priceController = TextEditingController();
   final TextEditingController _stockController = TextEditingController();
@@ -34,8 +37,19 @@ class _ProductSelectorSheetState extends State<ProductSelectorSheet> {
             return DropdownButtonFormField<String>(
               decoration: const InputDecoration(labelText: "القسم الرئيسي"),
               value: selectedMainCatId,
-              items: snapshot.data!.docs.map((doc) => DropdownMenuItem(value: doc.id, child: Text(doc['name']))).toList(),
-              onChanged: (val) => setState(() { selectedMainCatId = val; selectedSubCatId = null; selectedProduct = null; selectedUnit = null; }),
+              items: snapshot.data!.docs.map((doc) {
+                return DropdownMenuItem(
+                  value: doc.id,
+                  onTap: () => selectedMainCatName = doc['name'], // حفظ الاسم
+                  child: Text(doc['name']),
+                );
+              }).toList(),
+              onChanged: (val) => setState(() {
+                selectedMainCatId = val;
+                selectedSubCatId = null;
+                selectedProduct = null;
+                selectedUnit = null;
+              }),
             );
           },
         ),
@@ -43,14 +57,25 @@ class _ProductSelectorSheetState extends State<ProductSelectorSheet> {
         // 2. القسم الفرعي
         if (selectedMainCatId != null)
           StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('subCategory').where('mainId', isEqualTo: selectedMainCatId).snapshots(),
+            stream: FirebaseFirestore.instance.collection('subCategory')
+                .where('mainId', isEqualTo: selectedMainCatId).snapshots(),
             builder: (context, snapshot) {
               if (!snapshot.hasData) return const SizedBox();
               return DropdownButtonFormField<String>(
                 decoration: const InputDecoration(labelText: "القسم الفرعي"),
                 value: selectedSubCatId,
-                items: snapshot.data!.docs.map((doc) => DropdownMenuItem(value: doc.id, child: Text(doc['name']))).toList(),
-                onChanged: (val) => setState(() { selectedSubCatId = val; selectedProduct = null; selectedUnit = null; }),
+                items: snapshot.data!.docs.map((doc) {
+                  return DropdownMenuItem(
+                    value: doc.id,
+                    onTap: () => selectedSubCatName = doc['name'], // حفظ الاسم
+                    child: Text(doc['name']),
+                  );
+                }).toList(),
+                onChanged: (val) => setState(() {
+                  selectedSubCatId = val;
+                  selectedProduct = null;
+                  selectedUnit = null;
+                }),
               );
             },
           ),
@@ -58,21 +83,28 @@ class _ProductSelectorSheetState extends State<ProductSelectorSheet> {
         // 3. اختيار المنتج
         if (selectedSubCatId != null)
           StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('products').where('subId', isEqualTo: selectedSubCatId).snapshots(),
+            stream: FirebaseFirestore.instance.collection('products')
+                .where('subId', isEqualTo: selectedSubCatId).snapshots(),
             builder: (context, snapshot) {
               if (!snapshot.hasData) return const SizedBox();
               return DropdownButtonFormField<Map<String, dynamic>>(
                 decoration: const InputDecoration(labelText: "المنتج"),
                 items: snapshot.data!.docs.map((doc) {
                   final data = doc.data() as Map<String, dynamic>;
-                  return DropdownMenuItem(value: {...data, 'id': doc.id}, child: Text(data['name']));
+                  return DropdownMenuItem(
+                    value: {...data, 'id': doc.id},
+                    child: Text(data['name']),
+                  );
                 }).toList(),
-                onChanged: (val) => setState(() { selectedProduct = val; selectedUnit = null; }),
+                onChanged: (val) => setState(() {
+                  selectedProduct = val;
+                  selectedUnit = null;
+                }),
               );
             },
           ),
 
-        // 4. اختيار الوحدة (موجود في الـ HTML وغير موجود في كودك السابق)
+        // 4. اختيار الوحدة
         if (selectedProduct != null && selectedProduct!['units'] != null)
           DropdownButtonFormField<String>(
             decoration: const InputDecoration(labelText: "اختر الوحدة"),
@@ -84,6 +116,7 @@ class _ProductSelectorSheetState extends State<ProductSelectorSheet> {
           ),
 
         if (selectedUnit != null) ...[
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(child: TextField(controller: _priceController, decoration: const InputDecoration(labelText: "السعر"), keyboardType: TextInputType.number)),
@@ -91,27 +124,37 @@ class _ProductSelectorSheetState extends State<ProductSelectorSheet> {
               Expanded(child: TextField(controller: _stockController, decoration: const InputDecoration(labelText: "الكمية المتاحة"), keyboardType: TextInputType.number)),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 15),
           ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blueGrey),
             onPressed: () {
               if (_priceController.text.isNotEmpty && _stockController.text.isNotEmpty) {
-                // إرسال البيانات بنفس مفاتيح الـ HTML تماماً
+                // تجميع البيانات في هيكل مطابق تماماً لطلبات الـ Web و Firestore
                 widget.onProductAdded({
                   'productId': selectedProduct!['id'],
                   'productName': selectedProduct!['name'],
                   'mainCategoryId': selectedMainCatId,
+                  'mainCategoryName': selectedMainCatName, // أضفنا الاسم هنا
                   'subCategoryId': selectedSubCatId,
+                  'subCategoryName': selectedSubCatName, // أضفنا الاسم هنا
                   'imageUrl': selectedProduct!['imageUrl'] ?? '',
-                  'unitName': selectedUnit,
-                  'price': double.parse(_priceController.text),
-                  'availableStock': int.parse(_stockController.text), // مطابقة لاسم الحقل في HTML
+                  'units': [
+                    {
+                      'unitName': selectedUnit,
+                      'price': double.tryParse(_priceController.text) ?? 0,
+                      'availableStock': int.tryParse(_stockController.text) ?? 0,
+                      'updatedAt': DateTime.now().toIso8601String(),
+                    }
+                  ],
                 });
+
                 _priceController.clear();
                 _stockController.clear();
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تمت الإضافة للقائمة")));
                 setState(() { selectedUnit = null; });
               }
             },
-            child: const Text("إضافة المنتج للقائمة"),
+            child: const Text("إضافة العرض", style: TextStyle(color: Colors.white)),
           )
         ],
       ],
