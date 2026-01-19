@@ -11,18 +11,21 @@ class VehicleSettingsScreen extends StatefulWidget {
 class _VehicleSettingsScreenState extends State<VehicleSettingsScreen> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final List<String> _vehicles = ['motorcycle', 'pickup', 'jumbo'];
-  
-  // دالة لتحديث البيانات في Firestore
+
   Future<void> _updateSettings(String vehicle, Map<String, dynamic> data) async {
     try {
       await _db.collection('appSettings').doc('${vehicle}Config').set(data, SetOptions(merge: true));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("تم تحديث إعدادات $vehicle بنجاح ✅"), backgroundColor: Colors.green),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("تم تحديث إعدادات $vehicle بنجاح ✅"), backgroundColor: Colors.green),
+        );
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("خطأ في التحديث: $e"), backgroundColor: Colors.red),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("خطأ في التحديث: $e"), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -55,13 +58,14 @@ class VehicleConfigCard extends StatefulWidget {
 }
 
 class _VehicleConfigCardState extends State<VehicleConfigCard> {
-  // تعريف الـ Controllers لكل حقل
+  // 🔥 تم إضافة حقل cancelPenaltyPoints هنا
   final Map<String, TextEditingController> _controllers = {
     'baseFare': TextEditingController(),
     'kmRate': TextEditingController(),
     'minFare': TextEditingController(),
     'serviceFee': TextEditingController(),
     'serviceFeePercentage': TextEditingController(),
+    'cancelPenaltyPoints': TextEditingController(), // حقل غرامة الإلغاء
   };
 
   bool _isLoaded = false;
@@ -72,15 +76,19 @@ class _VehicleConfigCardState extends State<VehicleConfigCard> {
     _loadData();
   }
 
-  // جلب البيانات الحقيقية من الفايربيز ووضعها في الـ Controllers
   _loadData() async {
-    var doc = await FirebaseFirestore.instance.collection('appSettings').doc('${widget.vehicleName}Config').get();
+    var doc = await FirebaseFirestore.instance
+        .collection('appSettings')
+        .doc('${widget.vehicleName}Config')
+        .get();
     if (doc.exists) {
       var data = doc.data()!;
       _controllers.forEach((key, controller) {
         controller.text = (data[key] ?? '0').toString();
       });
-      setState(() => _isLoaded = true);
+      if (mounted) setState(() => _isLoaded = true);
+    } else {
+      if (mounted) setState(() => _isLoaded = true);
     }
   }
 
@@ -101,7 +109,8 @@ class _VehicleConfigCardState extends State<VehicleConfigCard> {
               children: [
                 const Icon(Icons.settings_suggest, color: Colors.blue),
                 const SizedBox(width: 10),
-                Text(widget.vehicleName.toUpperCase(), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                Text(widget.vehicleName.toUpperCase(),
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               ],
             ),
             const Divider(height: 30),
@@ -114,6 +123,8 @@ class _VehicleConfigCardState extends State<VehicleConfigCard> {
                 _buildField("الحد الأدنى للرحلة", _controllers['minFare']!),
                 _buildField("العمولة الثابتة (Min)", _controllers['serviceFee']!),
                 _buildField("نسبة العمولة (%)", _controllers['serviceFeePercentage']!),
+                // 🔥 إضافة الحقل في الواجهة
+                _buildField("غرامة الإلغاء (نقاط)", _controllers['cancelPenaltyPoints']!, isPenalty: true),
               ],
             ),
             const SizedBox(height: 20),
@@ -122,7 +133,8 @@ class _VehicleConfigCardState extends State<VehicleConfigCard> {
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.save),
                 label: const Text("حفظ التعديلات"),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[900], foregroundColor: Colors.white),
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue[900], foregroundColor: Colors.white),
                 onPressed: () {
                   Map<String, dynamic> dataToSave = {};
                   _controllers.forEach((key, controller) {
@@ -138,7 +150,7 @@ class _VehicleConfigCardState extends State<VehicleConfigCard> {
     );
   }
 
-  Widget _buildField(String label, TextEditingController controller) {
+  Widget _buildField(String label, TextEditingController controller, {bool isPenalty = false}) {
     return SizedBox(
       width: 200,
       child: TextField(
@@ -146,8 +158,11 @@ class _VehicleConfigCardState extends State<VehicleConfigCard> {
         keyboardType: TextInputType.number,
         decoration: InputDecoration(
           labelText: label,
+          labelStyle: TextStyle(color: isPenalty ? Colors.red : null), // تمييز الغرامة باللون
           border: const OutlineInputBorder(),
-          prefixIcon: const Icon(Icons.edit, size: 16),
+          prefixIcon: Icon(isPenalty ? Icons.warning_amber_rounded : Icons.edit, 
+                          size: 16, 
+                          color: isPenalty ? Colors.red : null),
         ),
       ),
     );
