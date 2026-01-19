@@ -23,7 +23,6 @@ class PendingFreeDriversTab extends StatelessWidget {
           itemBuilder: (context, index) {
             var doc = snapshot.data!.docs[index];
             var data = doc.data() as Map<String, dynamic>;
-            
             return _buildDriverRequestCard(context, doc.id, data);
           },
         );
@@ -32,8 +31,8 @@ class PendingFreeDriversTab extends StatelessWidget {
   }
 
   Widget _buildDriverRequestCard(BuildContext context, String uid, Map<String, dynamic> data) {
-    String vehicleName = data['vehicleConfig'] == 'motorcycleConfig' 
-        ? "موتوسيكل" 
+    String vehicleName = data['vehicleConfig'] == 'motorcycleConfig'
+        ? "موتوسيكل"
         : (data['vehicleConfig'] == 'pickupConfig' ? "بيك أب" : "جامبو");
 
     return Card(
@@ -45,9 +44,9 @@ class PendingFreeDriversTab extends StatelessWidget {
           backgroundColor: Color(0xFF43B97F),
           child: Icon(Icons.motorcycle, color: Colors.white),
         ),
-        title: Text(data['fullname'] ?? 'بدون اسم', 
+        title: Text(data['fullname'] ?? 'بدون اسم',
             style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-        subtitle: Text("مركبة: $vehicleName | هاتف: ${data['phone']}", 
+        subtitle: Text("مركبة: $vehicleName | هاتف: ${data['phone']}",
             style: const TextStyle(fontFamily: 'Cairo', fontSize: 12)),
         children: [
           Padding(
@@ -105,20 +104,72 @@ class PendingFreeDriversTab extends StatelessWidget {
     }
   }
 
-  // منطق القبول (المنطق المالي الخاص بك)
+  // منطق القبول المحدث (بدون ثوابت صلبة)
   void _approveDriver(BuildContext context, String uid, Map<String, dynamic> data) async {
-    bool? confirm = await _showDialog(context, "تفعيل الحساب وإضافة رصيد تشغيل 50 ج.م افتراضي؟");
+    // كونتولر للتحكم في القيمة يدوياً من قبل الأدمن
+    final TextEditingController limitController = TextEditingController(text: "50");
+
+    bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("تفعيل حساب مندوب", textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("حدد حد المديونية المسموح به لهذا المندوب:", 
+              textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Cairo', fontSize: 14)),
+            const SizedBox(height: 20),
+            TextField(
+              controller: limitController,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              decoration: InputDecoration(
+                suffixText: "ج.م",
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                filled: true,
+                fillColor: Colors.grey[100],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("إلغاء", style: TextStyle(fontFamily: 'Cairo'))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF43B97F)),
+            child: const Text("تأكيد التفعيل", style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
     if (confirm == true) {
-      await FirebaseFirestore.instance.collection('freeDrivers').doc(uid).set({
-        ...data,
-        'status': "approved",
-        'walletBalance': 0, // الرصيد الحالي
-        'creditLimit': null, // لجعل السيستم يقرأ الـ 50 الافتراضية
-        'approvedAt': FieldValue.serverTimestamp(),
-      });
-      await FirebaseFirestore.instance.collection('pendingFreeDrivers').doc(uid).delete();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم التفعيل بنجاح")));
+      double finalLimit = double.tryParse(limitController.text) ?? 50.0;
+
+      try {
+        await FirebaseFirestore.instance.collection('freeDrivers').doc(uid).set({
+          ...data,
+          'status': "approved",
+          'walletBalance': 0.0,      // تهيئة المحفظة بصفر كاش فعلي
+          'creditLimit': finalLimit, // القيمة الديناميكية التي أدخلها الأدمن
+          'approvedAt': FieldValue.serverTimestamp(),
+          'totalOrders': 0,
+          'isOnline': false,
+        });
+
+        // حذف من قائمة الانتظار بعد النقل بنجاح
+        await FirebaseFirestore.instance.collection('pendingFreeDrivers').doc(uid).delete();
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("تم تفعيل ${data['fullname']} بحد $finalLimit ج.م ✅"), backgroundColor: Colors.green)
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ أثناء التفعيل: $e"), backgroundColor: Colors.red));
+        }
       }
     }
   }
