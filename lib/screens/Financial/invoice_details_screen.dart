@@ -10,14 +10,14 @@ class InvoiceDetailsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("فاتورة رقم: ${invoiceId.substring(0, 8)}", 
-                   style: const TextStyle(fontFamily: 'Cairo')),
+        title: Text("فاتورة رقم: ${invoiceId.substring(0, 8)}",
+            style: const TextStyle(fontFamily: 'Cairo')),
+        backgroundColor: const Color(0xFFB30000),
         actions: [
           IconButton(
             icon: const Icon(Icons.print),
             onPressed: () {
-              // في الويب، هذا الأمر يفتح نافذة طباعة المتصفح
-              // html.window.print(); // يحتاج استيراد dart:html
+              // يمكن لاحقاً إضافة وظيفة الطباعة هنا
             },
           )
         ],
@@ -44,11 +44,12 @@ class InvoiceDetailsScreen extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       child: Center(
         child: Container(
-          maxWidth: 800,
+          // الإصلاح الجوهري هنا: استخدام BoxConstraints بدلاً من maxWidth المباشرة
+          constraints: const BoxConstraints(maxWidth: 800),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(10),
-            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10)],
+            boxShadow: [const BoxShadow(color: Colors.black12, blurRadius: 10)],
           ),
           child: Column(
             children: [
@@ -62,9 +63,13 @@ class InvoiceDetailsScreen extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text("فاتورة ضريبية", 
-                        style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-                    Image.network('https://your-logo-url.com/logo.png', height: 50, errorBuilder: (c, e, s) => const Icon(Icons.receipt_long, color: Colors.white, size: 40)),
+                    const Text("فاتورة ضريبية (أكسب)",
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Cairo')),
+                    const Icon(Icons.receipt_long, color: Colors.white, size: 40),
                   ],
                 ),
               ),
@@ -77,18 +82,24 @@ class InvoiceDetailsScreen extends StatelessWidget {
                     _buildHeaderInfo(data),
                     const Divider(height: 40),
                     
-                    _buildSectionTitle("بيانات الحساب المالي (اللمدا)"),
+                    _buildSectionTitle("بيانات المحرك المالي (اللمدا)"),
                     _buildDetailRow("العمولة المحققة (realizedCommission)", data['realizedCommission']),
-                    _buildDetailRow("الاشتراك الشهري (monthlyFee)", data['monthlyFee']),
+                    _buildDetailRow("الاشتراك الشهري الثابت (monthlyFee)", data['monthlyFee']),
                     _buildDetailRow("ضريبة القيمة المضافة (vatAmount)", data['vatAmount']),
                     
                     const SizedBox(height: 20),
-                    _buildSectionTitle("تسويات الكاش باك"),
+                    _buildSectionTitle("تسويات الكاش باك والديون"),
                     _buildDetailRow("ديون كاش باك (accruedDebt)", data['cashbackAccruedDebt'], isDebt: true),
-                    _buildDetailRow("رصيد كاش باك (platformCredit)", data['cashbackPlatformCredit'], isCredit: true),
+                    _buildDetailRow("رصيد مستحق للمورد (platformCredit)", data['cashbackPlatformCredit'], isCredit: true),
                     
                     const SizedBox(height: 30),
                     _buildTotalSection(data['finalAmount']),
+                    
+                    const SizedBox(height: 40),
+                    const Center(
+                      child: Text("شكراً لتعاملكم مع منصة أكسب",
+                          style: TextStyle(fontFamily: 'Cairo', color: Colors.grey, fontSize: 12)),
+                    )
                   ],
                 ),
               ),
@@ -107,12 +118,12 @@ class InvoiceDetailsScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text("معرف التاجر: ${data['sellerId']}", style: const TextStyle(fontWeight: FontWeight.bold)),
-            Text("التاريخ: ${data['creationDate']?.toString().split('T')[0] ?? ''}"),
+            Text("تاريخ الإصدار: ${data['creationDate']?.toString().split('T')[0] ?? ''}"),
           ],
         ),
         Chip(
-          label: Text(data['status'] == 'paid' ? "تم السداد" : "مستحقة", 
-                     style: const TextStyle(color: Colors.white, fontFamily: 'Cairo')),
+          label: Text(data['status'] == 'paid' ? "تم السداد" : "مستحقة للدفع",
+              style: const TextStyle(color: Colors.white, fontFamily: 'Cairo')),
           backgroundColor: data['status'] == 'paid' ? Colors.green : Colors.orange,
         ),
       ],
@@ -122,7 +133,12 @@ class InvoiceDetailsScreen extends StatelessWidget {
   Widget _buildSectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFB30000), fontFamily: 'Cairo')),
+      child: Text(title,
+          style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFFB30000),
+              fontFamily: 'Cairo')),
     );
   }
 
@@ -137,15 +153,16 @@ class InvoiceDetailsScreen extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.grey, fontFamily: 'Cairo')),
-          Text("${amount.toStringAsFixed(2)} ج.م", 
-               style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
+          Expanded(child: Text(label, style: const TextStyle(color: Colors.grey, fontFamily: 'Cairo', fontSize: 13))),
+          Text("${amount.toStringAsFixed(2)} ج.م",
+              style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
         ],
       ),
     );
   }
 
   Widget _buildTotalSection(dynamic finalAmount) {
+    double amount = double.tryParse(finalAmount?.toString() ?? '0') ?? 0;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -156,10 +173,10 @@ class InvoiceDetailsScreen extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text("صافي المبلغ المطلوب:", 
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
-          Text("${finalAmount ?? '0.00'} ج.م", 
-               style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFFB30000))),
+          const Text("صافي المبلغ المطلوب:",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+          Text("${amount.toStringAsFixed(2)} ج.م",
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFFB30000))),
         ],
       ),
     );
