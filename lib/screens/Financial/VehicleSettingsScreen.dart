@@ -14,6 +14,7 @@ class _VehicleSettingsScreenState extends State<VehicleSettingsScreen> {
 
   Future<void> _updateSettings(String vehicle, Map<String, dynamic> data) async {
     try {
+      // استخدام merge: true يضمن إضافة الحقل الجديد دون مسح القديم
       await _db.collection('appSettings').doc('${vehicle}Config').set(data, SetOptions(merge: true));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -58,14 +59,13 @@ class VehicleConfigCard extends StatefulWidget {
 }
 
 class _VehicleConfigCardState extends State<VehicleConfigCard> {
-  // 🔥 تم إضافة حقل cancelPenaltyPoints هنا
   final Map<String, TextEditingController> _controllers = {
     'baseFare': TextEditingController(),
     'kmRate': TextEditingController(),
     'minFare': TextEditingController(),
     'serviceFee': TextEditingController(),
     'serviceFeePercentage': TextEditingController(),
-    'cancelPenaltyPoints': TextEditingController(), // حقل غرامة الإلغاء
+    'cancelPenaltyPoints': TextEditingController(), // الحقل الجديد للغرامة
   };
 
   bool _isLoaded = false;
@@ -81,15 +81,19 @@ class _VehicleConfigCardState extends State<VehicleConfigCard> {
         .collection('appSettings')
         .doc('${widget.vehicleName}Config')
         .get();
+
     if (doc.exists) {
       var data = doc.data()!;
       _controllers.forEach((key, controller) {
+        // تأكد من وضع '0' كقيمة افتراضية إذا لم يكن الحقل موجوداً في Firestore
         controller.text = (data[key] ?? '0').toString();
       });
-      if (mounted) setState(() => _isLoaded = true);
     } else {
-      if (mounted) setState(() => _isLoaded = true);
+      // في حالة عدم وجود المستند أصلاً، نملأ الحقول بأصفار
+      _controllers.forEach((key, controller) => controller.text = '0');
     }
+    
+    if (mounted) setState(() => _isLoaded = true);
   }
 
   @override
@@ -123,7 +127,7 @@ class _VehicleConfigCardState extends State<VehicleConfigCard> {
                 _buildField("الحد الأدنى للرحلة", _controllers['minFare']!),
                 _buildField("العمولة الثابتة (Min)", _controllers['serviceFee']!),
                 _buildField("نسبة العمولة (%)", _controllers['serviceFeePercentage']!),
-                // 🔥 إضافة الحقل في الواجهة
+                // عرض حقل الغرامة بلون مختلف للتمييز
                 _buildField("غرامة الإلغاء (نقاط)", _controllers['cancelPenaltyPoints']!, isPenalty: true),
               ],
             ),
@@ -158,11 +162,13 @@ class _VehicleConfigCardState extends State<VehicleConfigCard> {
         keyboardType: TextInputType.number,
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: TextStyle(color: isPenalty ? Colors.red : null), // تمييز الغرامة باللون
+          labelStyle: TextStyle(color: isPenalty ? Colors.red[700] : null),
           border: const OutlineInputBorder(),
-          prefixIcon: Icon(isPenalty ? Icons.warning_amber_rounded : Icons.edit, 
-                          size: 16, 
-                          color: isPenalty ? Colors.red : null),
+          prefixIcon: Icon(
+            isPenalty ? Icons.warning_amber_rounded : Icons.edit,
+            size: 16,
+            color: isPenalty ? Colors.red : null,
+          ),
         ),
       ),
     );
