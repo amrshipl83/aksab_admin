@@ -25,6 +25,16 @@ class _FinancialSummaryScreenState extends State<FinancialSummaryScreen> {
         title: const Text("ملخص أرصدة المنصة التراكمي", style: TextStyle(fontFamily: 'Cairo')),
         backgroundColor: const Color(0xFFB21F2D),
         centerTitle: true,
+        actions: [
+          // الزر الجديد لفتح إعدادات حسابات المركبات
+          TextButton.icon(
+            onPressed: () => _showVehicleSettingsSheet(context),
+            icon: const Icon(Icons.settings_suggest, color: Colors.white),
+            label: const Text("إعدادات حسابات التوصيل", 
+                style: TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(width: 10),
+        ],
       ),
       body: FutureBuilder<Map<String, dynamic>>(
         future: _fetchFinancialData(),
@@ -48,8 +58,7 @@ class _FinancialSummaryScreenState extends State<FinancialSummaryScreen> {
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
                 ),
                 const SizedBox(height: 20),
-                
-                // شبكة الكروت المالية
+
                 GridView.count(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -58,43 +67,12 @@ class _FinancialSummaryScreenState extends State<FinancialSummaryScreen> {
                   mainAxisSpacing: 15,
                   childAspectRatio: 2.5,
                   children: [
-                    _buildFinanceCard(
-                      "عمولات محققة مستحقة",
-                      data['realized'],
-                      Icons.check_circle_outline,
-                      Colors.green,
-                    ),
-                    _buildFinanceCard(
-                      "عمولات قيد التجميع",
-                      data['unrealized'],
-                      Icons.hourglass_empty,
-                      Colors.orange,
-                    ),
-                    _buildFinanceCard(
-                      "دين كاش باك (من التجار)",
-                      data['cbDebt'],
-                      Icons.trending_down,
-                      Colors.red,
-                    ),
-                    _buildFinanceCard(
-                      "كاش باك مستحق (للتجار)",
-                      data['cbCredit'],
-                      Icons.account_balance_wallet,
-                      Colors.blue,
-                    ),
-                    _buildFinanceCard(
-                      "إيرادات الرسوم الشهرية",
-                      data['monthlyFees'],
-                      Icons.calendar_today,
-                      Colors.teal,
-                    ),
-                    _buildFinanceCard(
-                      "فواتير قيد الانتظار",
-                      data['pendingInvoices'].toDouble(),
-                      Icons.receipt_long,
-                      Colors.blueGrey,
-                      isCurrency: false,
-                    ),
+                    _buildFinanceCard("عمولات محققة مستحقة", data['realized'], Icons.check_circle_outline, Colors.green),
+                    _buildFinanceCard("عمولات قيد التجميع", data['unrealized'], Icons.hourglass_empty, Colors.orange),
+                    _buildFinanceCard("دين كاش باك (من التجار)", data['cbDebt'], Icons.trending_down, Colors.red),
+                    _buildFinanceCard("كاش باك مستحق (للتجار)", data['cbCredit'], Icons.account_balance_wallet, Colors.blue),
+                    _buildFinanceCard("إيرادات الرسوم الشهرية", data['monthlyFees'], Icons.calendar_today, Colors.teal),
+                    _buildFinanceCard("فواتير قيد الانتظار", data['pendingInvoices'].toDouble(), Icons.receipt_long, Colors.blueGrey, isCurrency: false),
                   ],
                 ),
               ],
@@ -105,7 +83,23 @@ class _FinancialSummaryScreenState extends State<FinancialSummaryScreen> {
     );
   }
 
-  // دالة جلب البيانات من Firestore (نفس منطق الـ JavaScript)
+  // --- دالة إظهار نافذة إعدادات المركبات ---
+  void _showVehicleSettingsSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.85,
+        decoration: const BoxDecoration(
+          color: Color(0xFFF4F7FA),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+        ),
+        child: const VehicleSettingsPanel(),
+      ),
+    );
+  }
+
   Future<Map<String, dynamic>> _fetchFinancialData() async {
     double totalRealized = 0;
     double totalUnrealized = 0;
@@ -113,7 +107,6 @@ class _FinancialSummaryScreenState extends State<FinancialSummaryScreen> {
     double totalCbCredit = 0;
     double totalMonthlyFees = 0;
 
-    // 1. تجميع بيانات التجار
     final sellersSnapshot = await _db.collection('sellers').get();
     for (var doc in sellersSnapshot.docs) {
       final d = doc.data();
@@ -124,11 +117,7 @@ class _FinancialSummaryScreenState extends State<FinancialSummaryScreen> {
       totalMonthlyFees += (d['monthlyFee'] ?? 0).toDouble();
     }
 
-    // 2. حساب الفواتير المعلقة
-    final invoicesSnapshot = await _db
-        .collection('invoices')
-        .where('status', isEqualTo: 'pending')
-        .get();
+    final invoicesSnapshot = await _db.collection('invoices').where('status', isEqualTo: 'pending').get();
 
     return {
       'realized': totalRealized,
@@ -140,7 +129,6 @@ class _FinancialSummaryScreenState extends State<FinancialSummaryScreen> {
     };
   }
 
-  // بناء كرت مالي احترافي
   Widget _buildFinanceCard(String title, double value, IconData icon, Color color, {bool isCurrency = true}) {
     return Container(
       decoration: BoxDecoration(
@@ -152,10 +140,7 @@ class _FinancialSummaryScreenState extends State<FinancialSummaryScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 20),
       child: Row(
         children: [
-          CircleAvatar(
-            backgroundColor: color.withOpacity(0.1),
-            child: Icon(icon, color: color),
-          ),
+          CircleAvatar(backgroundColor: color.withOpacity(0.1), child: Icon(icon, color: color)),
           const SizedBox(width: 15),
           Expanded(
             child: Column(
@@ -172,6 +157,163 @@ class _FinancialSummaryScreenState extends State<FinancialSummaryScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// --- الجزء الخاص بإدارة إعدادات حسابات المركبات ---
+
+class VehicleSettingsPanel extends StatelessWidget {
+  const VehicleSettingsPanel({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final List<String> vehicles = ['motorcycle', 'pickup', 'jumbo'];
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("إعدادات حسابات المركبات (صارم)", 
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+              IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            itemCount: vehicles.length,
+            itemBuilder: (context, index) => VehicleConfigCard(vehicleName: vehicles[index]),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class VehicleConfigCard extends StatefulWidget {
+  final String vehicleName;
+  const VehicleConfigCard({super.key, required this.vehicleName});
+
+  @override
+  State<VehicleConfigCard> createState() => _VehicleConfigCardState();
+}
+
+class _VehicleConfigCardState extends State<VehicleConfigCard> {
+  final Map<String, TextEditingController> _controllers = {
+    'baseFare': TextEditingController(),
+    'kmRate': TextEditingController(),
+    'minFare': TextEditingController(),
+    'serviceFee': TextEditingController(),
+    'serviceFeePercentage': TextEditingController(),
+  };
+
+  bool _isLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  _loadData() async {
+    var doc = await FirebaseFirestore.instance.collection('appSettings').doc('${widget.vehicleName}Config').get();
+    if (doc.exists) {
+      var data = doc.data()!;
+      _controllers.forEach((key, controller) {
+        controller.text = (data[key] ?? '0').toString();
+      });
+      setState(() => _isLoaded = true);
+    }
+  }
+
+  Future<void> _save() async {
+    try {
+      Map<String, dynamic> dataToSave = {};
+      _controllers.forEach((key, controller) {
+        dataToSave[key] = double.tryParse(controller.text) ?? 0.0;
+      });
+
+      await FirebaseFirestore.instance
+          .collection('appSettings')
+          .doc('${widget.vehicleName}Config')
+          .set(dataToSave, SetOptions(merge: true));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("تم تحديث ${widget.vehicleName} بنجاح ✅"), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ: $e"), backgroundColor: Colors.red));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isLoaded) return const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator()));
+
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 20),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.local_shipping, color: Color(0xFFB21F2D)),
+                const SizedBox(width: 10),
+                Text(widget.vehicleName.toUpperCase(), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const Divider(),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 15,
+              runSpacing: 15,
+              children: [
+                _buildInput("فتح العداد", _controllers['baseFare']!),
+                _buildInput("سعر الكيلو", _controllers['kmRate']!),
+                _buildInput("أقل رحلة", _controllers['minFare']!),
+                _buildInput("عمولة ثابتة", _controllers['serviceFee']!),
+                _buildInput("نسبة %", _controllers['serviceFeePercentage']!),
+              ],
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _save,
+                icon: const Icon(Icons.save),
+                label: const Text("حفظ الإعدادات"),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.green[700], foregroundColor: Colors.white),
+              ),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInput(String label, TextEditingController controller) {
+    return SizedBox(
+      width: 140,
+      child: TextField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(fontSize: 12, fontFamily: 'Cairo'),
+          border: const OutlineInputBorder(),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        ),
       ),
     );
   }
