@@ -26,11 +26,10 @@ class _FinancialSummaryScreenState extends State<FinancialSummaryScreen> {
         backgroundColor: const Color(0xFFB21F2D),
         centerTitle: true,
         actions: [
-          // الزر الجديد لفتح إعدادات حسابات المركبات
           TextButton.icon(
             onPressed: () => _showVehicleSettingsSheet(context),
             icon: const Icon(Icons.settings_suggest, color: Colors.white),
-            label: const Text("إعدادات حسابات التوصيل", 
+            label: const Text("إعدادات حسابات التوصيل",
                 style: TextStyle(color: Colors.white, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
           ),
           const SizedBox(width: 10),
@@ -47,7 +46,6 @@ class _FinancialSummaryScreenState extends State<FinancialSummaryScreen> {
           }
 
           final data = snapshot.data!;
-
           return SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -58,7 +56,6 @@ class _FinancialSummaryScreenState extends State<FinancialSummaryScreen> {
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
                 ),
                 const SizedBox(height: 20),
-
                 GridView.count(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
@@ -83,7 +80,6 @@ class _FinancialSummaryScreenState extends State<FinancialSummaryScreen> {
     );
   }
 
-  // --- دالة إظهار نافذة إعدادات المركبات ---
   void _showVehicleSettingsSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -118,7 +114,6 @@ class _FinancialSummaryScreenState extends State<FinancialSummaryScreen> {
     }
 
     final invoicesSnapshot = await _db.collection('invoices').where('status', isEqualTo: 'pending').get();
-
     return {
       'realized': totalRealized,
       'unrealized': totalUnrealized,
@@ -162,8 +157,6 @@ class _FinancialSummaryScreenState extends State<FinancialSummaryScreen> {
   }
 }
 
-// --- الجزء الخاص بإدارة إعدادات حسابات المركبات ---
-
 class VehicleSettingsPanel extends StatelessWidget {
   const VehicleSettingsPanel({super.key});
 
@@ -178,8 +171,8 @@ class VehicleSettingsPanel extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("إعدادات حسابات المركبات (صارم)", 
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+              const Text("إعدادات حسابات المركبات (المحدثة)",
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
               IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.close)),
             ],
           ),
@@ -211,6 +204,7 @@ class _VehicleConfigCardState extends State<VehicleConfigCard> {
     'minFare': TextEditingController(),
     'serviceFee': TextEditingController(),
     'serviceFeePercentage': TextEditingController(),
+    'cancelPenaltyPoints': TextEditingController(), // 🔥 الحقل الجديد
   };
 
   bool _isLoaded = false;
@@ -226,10 +220,13 @@ class _VehicleConfigCardState extends State<VehicleConfigCard> {
     if (doc.exists) {
       var data = doc.data()!;
       _controllers.forEach((key, controller) {
+        // نضمن وضع 0 إذا لم يكن الحقل موجوداً في Firestore
         controller.text = (data[key] ?? '0').toString();
       });
-      setState(() => _isLoaded = true);
+    } else {
+      _controllers.forEach((key, controller) => controller.text = '0');
     }
+    if (mounted) setState(() => _isLoaded = true);
   }
 
   Future<void> _save() async {
@@ -246,7 +243,7 @@ class _VehicleConfigCardState extends State<VehicleConfigCard> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("تم تحديث ${widget.vehicleName} بنجاح ✅"), backgroundColor: Colors.green),
+          SnackBar(content: Text("تم تحديث إعدادات ${widget.vehicleName} بنجاح ✅"), backgroundColor: Colors.green),
         );
       }
     } catch (e) {
@@ -284,6 +281,8 @@ class _VehicleConfigCardState extends State<VehicleConfigCard> {
                 _buildInput("أقل رحلة", _controllers['minFare']!),
                 _buildInput("عمولة ثابتة", _controllers['serviceFee']!),
                 _buildInput("نسبة %", _controllers['serviceFeePercentage']!),
+                // 🔥 الحقل الجديد في الواجهة
+                _buildInput("غرامة إلغاء (نقطة)", _controllers['cancelPenaltyPoints']!, isPenalty: true),
               ],
             ),
             const SizedBox(height: 20),
@@ -302,17 +301,28 @@ class _VehicleConfigCardState extends State<VehicleConfigCard> {
     );
   }
 
-  Widget _buildInput(String label, TextEditingController controller) {
+  Widget _buildInput(String label, TextEditingController controller, {bool isPenalty = false}) {
     return SizedBox(
-      width: 140,
+      width: 155, // زدت العرض قليلاً ليناسب النص
       child: TextField(
         controller: controller,
         keyboardType: TextInputType.number,
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(fontSize: 12, fontFamily: 'Cairo'),
+          labelStyle: TextStyle(
+            fontSize: 12, 
+            fontFamily: 'Cairo', 
+            color: isPenalty ? Colors.red[900] : Colors.black54,
+            fontWeight: isPenalty ? FontWeight.bold : FontWeight.normal
+          ),
           border: const OutlineInputBorder(),
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: isPenalty ? Colors.red : Colors.blue, width: 2)
+          ),
           contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          prefixIcon: isPenalty ? const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 18) : null,
+          filled: isPenalty,
+          fillColor: isPenalty ? Colors.red.withOpacity(0.05) : null,
         ),
       ),
     );
