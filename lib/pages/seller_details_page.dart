@@ -13,11 +13,10 @@ class SellerDetailsPage extends StatelessWidget {
 
   String _f(dynamic val) => (val == null || val.toString().isEmpty) ? "—" : val.toString();
 
-  // --- دالة تصدير PDF احترافية ---
+  // --- دالة تصدير PDF احترافية مع مسميات اللمدا الموحدة ---
   Future<void> _exportToPdf(Map<String, dynamic> data) async {
     final pdf = pw.Document();
-    
-    // تحميل الخط العربي لدعم الكتابة بشكل صحيح
+
     final font = await PdfGoogleFonts.cairoRegular();
     final boldFont = await PdfGoogleFonts.cairoBold();
 
@@ -25,23 +24,21 @@ class SellerDetailsPage extends StatelessWidget {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         theme: pw.ThemeData.withFont(base: font, bold: boldFont),
-        textDirection: pw.TextDirection.rtl, // دعم العربية من اليمين لليسار
+        textDirection: pw.TextDirection.rtl,
         build: (pw.Context context) => [
-          // رأس الصفحة (Header)
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
               pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
-                  pw.Text("منصة أكسب - تقرير مورد", style: pw.TextStyle(fontSize: 24, color: PdfColors.blue900, fontWeight: pw.FontWeight.bold)),
+                  pw.Text("منصة أكسب - تقرير مورد مالي", style: pw.TextStyle(fontSize: 24, color: PdfColors.blue900, fontWeight: pw.FontWeight.bold)),
                   pw.Text("تاريخ التقرير: ${intl.DateFormat('yyyy-MM-dd').format(DateTime.now())}"),
                 ],
               ),
               pw.Container(
-                height: 60,
-                width: 60,
-                decoration: const pw.BoxDecoration(color: PdfColors.amber, shape: pw.BoxShape.circle),
+                height: 60, width: 60,
+                decoration: const pw.BoxDecoration(color: PdfColors.red900, shape: pw.BoxShape.circle),
                 child: pw.Center(child: pw.Text("AK", style: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold))),
               ),
             ],
@@ -50,45 +47,39 @@ class SellerDetailsPage extends StatelessWidget {
           pw.Divider(thickness: 2, color: PdfColors.blueGrey),
           pw.SizedBox(height: 20),
 
-          // قسم البيانات الأساسية (جدول)
-          _pdfSectionTitle("البيانات الأساسية التجارية", boldFont),
+          _pdfSectionTitle("البيانات الأساسية", boldFont),
           pw.TableHelper.fromTextArray(
             border: pw.TableBorder.all(color: PdfColors.grey300),
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
             data: [
               ['الحقل', 'القيمة'],
-              ['اسم المتجر/المورد', _f(data['merchantName'])],
-              ['اسم المسؤول', _f(data['fullname'])],
-              ['نوع النشاط', _f(data['businessType'])],
+              ['اسم المتجر', _f(data['merchantName'] ?? data['supermarketName'])],
               ['رقم الهاتف', _f(data['phone'])],
               ['العنوان', _f(data['address'])],
             ],
           ),
           pw.SizedBox(height: 20),
 
-          // قسم البيانات المالية
-          _pdfSectionTitle("المؤشرات المالية وإعدادات العمولة", boldFont),
+          _pdfSectionTitle("إعدادات المحرك المالي (اللمدا)", boldFont),
           pw.TableHelper.fromTextArray(
             border: pw.TableBorder.all(color: PdfColors.grey300),
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
             headerDecoration: const pw.BoxDecoration(color: PdfColors.green800),
             data: [
-              ['الحقل', 'القيمة'],
-              ['نوع العمولة', _translateCommissionType(data['commissionType'])],
-              ['نسبة العمولة', "${_f(data['commissionRate'])} %"],
-              ['العمولة الثابتة', "${_f(data['fixedCommission'])} ج.م"],
-              ['دين الكاش باك المستحق', "${_f(data['cashbackAccruedDebt'])} ج.م"],
-              ['رصيد المنصة الحالي', "${_f(data['cashbackPlatformCredit'])} ج.م"],
+              ['الحقل المالي', 'القيمة الحالية'],
+              ['الاشتراك الشهري الثابت (monthlyFee)', "${_f(data['monthlyFee'])} ج.م"],
+              ['نسبة العمولة (commissionRate)', "${_f(data['commissionRate'])} %"],
+              ['العمولة المحققة حالياً', "${_f(data['realizedCommission'])} ج.م"],
+              ['دين الكاش باك (accruedDebt)', "${_f(data['cashbackAccruedDebt'])} ج.م"],
+              ['رصيد المنصة (platformCredit)', "${_f(data['cashbackPlatformCredit'])} ج.م"],
             ],
           ),
-          pw.SizedBox(height: 20),
-
-          // تذييل الصفحة
+          pw.SizedBox(height: 40),
           pw.Divider(),
           pw.Align(
             alignment: pw.Alignment.centerLeft,
-            child: pw.Text("توقيع الإدارة المختصة: ________________", style: const pw.TextStyle(fontSize: 10)),
+            child: pw.Text("ختم الإدارة المالية: ________________", style: const pw.TextStyle(fontSize: 10)),
           ),
         ],
       ),
@@ -106,9 +97,6 @@ class SellerDetailsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    double screenWidth = MediaQuery.of(context).size.width;
-    bool isDesktop = screenWidth > 900;
-
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('sellers').doc(sellerId).snapshots(),
       builder: (context, snapshot) {
@@ -130,17 +118,15 @@ class SellerDetailsPage extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
-                _buildHeader(data, isDesktop),
+                _buildHeader(data),
                 const SizedBox(height: 20),
                 _buildFinancialSummaryCard(data),
                 const SizedBox(height: 16),
+                _buildCommissionCard(data), // الكارت المعدل
+                const SizedBox(height: 16),
                 _buildOperationsCard(data),
                 const SizedBox(height: 16),
-                _buildCommissionCard(data),
-                const SizedBox(height: 16),
                 _buildDocumentsCard(context, data),
-                const SizedBox(height: 16),
-                _buildIdentityCard(data),
               ],
             ),
           ),
@@ -149,31 +135,7 @@ class SellerDetailsPage extends StatelessWidget {
     );
   }
 
-  // (باقي دوال الـ UI: _buildHeader, _buildFinancialSummaryCard إلخ، بنفس المنطق السابق المعتمد)
-  // ... [يتم استخدام نفس الدوال من الكود السابق لضمان الثبات]
-  
-  Widget _buildFinancialSummaryCard(Map<String, dynamic> data) {
-    return _sectionCard("المؤشرات المالية المتقدمة", Icons.analytics, Colors.blueGrey, [
-      Row(children: [
-        Expanded(child: _staticRow("عمولة محققة", "${_f(data['realizedCommission'])} ج.م")),
-        const SizedBox(width: 10),
-        Expanded(child: _staticRow("عمولة معلقة", "${_f(data['unrealizedCommission'])} ج.م")),
-      ]),
-      const Divider(),
-      EditableInfoRow(label: "دين الكاش باك", value: _f(data['cashbackAccruedDebt']), field: "cashbackAccruedDebt", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
-      EditableInfoRow(label: "رصيد المنصة", value: _f(data['cashbackPlatformCredit']), field: "cashbackPlatformCredit", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
-    ]);
-  }
-
-  Widget _buildOperationsCard(Map<String, dynamic> data) {
-    return _sectionCard("التشغيل والتوصيل", Icons.local_shipping, Colors.deepPurple, [
-      EditableInfoRow(label: "رسوم التوصيل", value: _f(data['deliveryFee']), field: "deliveryFee", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
-      EditableInfoRow(label: "أقل طلب", value: _f(data['minOrderTotal']), field: "minOrderTotal", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
-      _staticRow("مناطق التوصيل", _f(data['deliveryAreas'])),
-    ]);
-  }
-
-  Widget _buildHeader(Map<String, dynamic> data, bool isDesktop) {
+  Widget _buildHeader(Map<String, dynamic> data) {
     String? logo = data['logoUrl'] ?? data['merchantLogoUrl'];
     return Container(
       padding: const EdgeInsets.all(20),
@@ -182,33 +144,47 @@ class SellerDetailsPage extends StatelessWidget {
         CircleAvatar(radius: 35, backgroundImage: logo != null ? NetworkImage(logo) : null, child: logo == null ? const Icon(Icons.store) : null),
         const SizedBox(width: 15),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(_f(data['merchantName']), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text(_f(data['merchantName'] ?? data['supermarketName']), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
           Text("معرف المورد: $sellerId", style: const TextStyle(fontSize: 10, color: Colors.grey)),
         ])),
       ]),
     );
   }
 
+  Widget _buildFinancialSummaryCard(Map<String, dynamic> data) {
+    return _sectionCard("المؤشرات المالية (اللمدا)", Icons.analytics, Colors.blueGrey, [
+      Row(children: [
+        Expanded(child: _staticRow("عمولة محققة", "${_f(data['realizedCommission'])} ج.م")),
+        const SizedBox(width: 10),
+        Expanded(child: _staticRow("عمولة معلقة", "${_f(data['unrealizedCommission'])} ج.م")),
+      ]),
+      const Divider(),
+      EditableInfoRow(label: "دين الكاش باك المجمع", value: _f(data['cashbackAccruedDebt']), field: "cashbackAccruedDebt", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
+      EditableInfoRow(label: "رصيد المنصة الدائن", value: _f(data['cashbackPlatformCredit']), field: "cashbackPlatformCredit", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
+    ]);
+  }
+
   Widget _buildCommissionCard(Map<String, dynamic> data) {
-    return _sectionCard("إعدادات العمولة", Icons.percent, Colors.green, [
-      _staticRow("النوع", _translateCommissionType(data['commissionType'])),
-      EditableInfoRow(label: "النسبة", value: _f(data['commissionRate']), field: "commissionRate", sellerId: sellerId, isNumber: true, suffix: " %"),
-      EditableInfoRow(label: "المبلغ الثابت", value: _f(data['fixedCommission']), field: "fixedCommission", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
+    return _sectionCard("إعدادات المحرك المالي", Icons.settings_suggest, Colors.green, [
+      _staticRow("نوع الحساب", _translateCommissionType(data['commissionType'])),
+      EditableInfoRow(label: "نسبة العمولة", value: _f(data['commissionRate']), field: "commissionRate", sellerId: sellerId, isNumber: true, suffix: " %"),
+      // تم التعديل من fixedCommission إلى monthlyFee ليتوافق مع اللمدا
+      EditableInfoRow(label: "الاشتراك الشهري الثابت", value: _f(data['monthlyFee']), field: "monthlyFee", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
+    ]);
+  }
+
+  Widget _buildOperationsCard(Map<String, dynamic> data) {
+    return _sectionCard("التشغيل والتوصيل", Icons.local_shipping, Colors.deepPurple, [
+      EditableInfoRow(label: "رسوم التوصيل", value: _f(data['deliveryFee']), field: "deliveryFee", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
+      EditableInfoRow(label: "أقل قيمة للطلب", value: _f(data['minOrderTotal']), field: "minOrderTotal", sellerId: sellerId, isNumber: true, suffix: " ج.م"),
+      _staticRow("مناطق التوصيل", _f(data['deliveryAreas'])),
     ]);
   }
 
   Widget _buildDocumentsCard(BuildContext context, Map<String, dynamic> data) {
-    return _sectionCard("المستندات", Icons.folder, Colors.red, [
+    return _sectionCard("المستندات القانونية", Icons.folder, Colors.red, [
       _imageRow(context, "السجل التجاري", data['crUrl']),
       _imageRow(context, "البطاقة الضريبية", data['tcUrl']),
-    ]);
-  }
-
-  Widget _buildIdentityCard(Map<String, dynamic> data) {
-    return _sectionCard("الهوية", Icons.person, Colors.orange, [
-      _staticRow("المسؤول", _f(data['fullname'])),
-      _staticRow("الهاتف", _f(data['phone'])),
-      _staticRow("العنوان", _f(data['address'])),
     ]);
   }
 
@@ -216,7 +192,7 @@ class SellerDetailsPage extends StatelessWidget {
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       child: Padding(padding: const EdgeInsets.all(15), child: Column(children: [
-        Row(children: [Icon(icon, color: color), const SizedBox(width: 10), Text(title, style: const TextStyle(fontWeight: FontWeight.bold))]),
+        Row(children: [Icon(icon, color: color), const SizedBox(width: 10), Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo'))]),
         const Divider(),
         ...children
       ])),
@@ -225,15 +201,15 @@ class SellerDetailsPage extends StatelessWidget {
 
   Widget _staticRow(String label, String value) {
     return Padding(padding: const EdgeInsets.symmetric(vertical: 5), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-      Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-      Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+      Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13, fontFamily: 'Cairo')),
+      Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, fontFamily: 'Cairo')),
     ]));
   }
 
   Widget _imageRow(BuildContext context, String label, String? url) {
     return Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-      Text(label),
-      url != null ? IconButton(icon: const Icon(Icons.visibility, color: Colors.blue), onPressed: () => showDialog(context: context, builder: (_) => Dialog(child: Image.network(url)))) : const Text("لا يوجد"),
+      Text(label, style: const TextStyle(fontFamily: 'Cairo')),
+      url != null ? IconButton(icon: const Icon(Icons.visibility, color: Colors.blue), onPressed: () => showDialog(context: context, builder: (_) => Dialog(child: Image.network(url)))) : const Text("غير مرفق"),
     ]);
   }
 
@@ -255,23 +231,25 @@ class EditableInfoRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
+        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13, fontFamily: 'Cairo')),
         InkWell(
           onTap: () {
             final ctrl = TextEditingController(text: value == "—" ? "" : value);
             showDialog(context: context, builder: (ctx) => AlertDialog(
-              title: Text("تعديل $label"),
+              title: Text("تعديل $label", style: const TextStyle(fontFamily: 'Cairo')),
               content: TextField(controller: ctrl, keyboardType: isNumber ? TextInputType.number : TextInputType.text),
               actions: [
                 TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("إلغاء")),
                 ElevatedButton(onPressed: () async {
-                  await FirebaseFirestore.instance.collection('sellers').doc(sellerId).update({field: isNumber ? (double.tryParse(ctrl.text) ?? 0.0) : ctrl.text});
+                  await FirebaseFirestore.instance.collection('sellers').doc(sellerId).update({
+                    field: isNumber ? (double.tryParse(ctrl.text) ?? 0.0) : ctrl.text
+                  });
                   Navigator.pop(ctx);
                 }, child: const Text("حفظ")),
               ],
             ));
           },
-          child: Text("$value$suffix", style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+          child: Text("$value$suffix", style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
         ),
       ]),
     );

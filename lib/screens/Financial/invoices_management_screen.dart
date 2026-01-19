@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
-// استيراد صفحة التفاصيل لفتحها عند الضغط
 import 'invoice_details_screen.dart';
 
 class InvoicesManagementScreen extends StatefulWidget {
@@ -30,7 +29,6 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
       Map<String, String> tempNames = {};
       for (var doc in snapshot.docs) {
         var data = doc.data();
-        // التوافق مع مفاتيح الربط التي أنشأناها سابقاً (supermarketName)
         tempNames[doc.id] = data['supermarketName'] ?? data['merchantName'] ?? 'تاجر غير مسمى';
       }
       if (mounted) setState(() => _sellerNames = tempNames);
@@ -53,7 +51,6 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
     }
   }
 
-  // دالة التاريخ المحدثة لمعالجة صيغة ISO من اللمدا (Z)
   String formatDate(dynamic dateValue) {
     try {
       if (dateValue == null || dateValue == "") return '--';
@@ -61,16 +58,13 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
       if (dateValue is Timestamp) {
         dt = dateValue.toDate();
       } else if (dateValue is String) {
-        // معالجة صيغة ISO 8601 التي تحتوي على حرف T و Z
         dt = DateTime.parse(dateValue).toLocal();
       } else {
         return '--';
       }
-      // تنسيق احترافي: السنة/الشهر/اليوم مع الوقت
       return DateFormat('yyyy/MM/dd | hh:mm a', 'ar_EG').format(dt);
     } catch (e) {
-      debugPrint("Date error: $e");
-      return dateValue.toString().split('T')[0]; // fallback
+      return dateValue.toString().split('T')[0];
     }
   }
 
@@ -133,88 +127,75 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
     return StreamBuilder<QuerySnapshot>(
       stream: _db.collection('invoices').orderBy('creationDate', descending: true).snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting)
-          return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError)
-          return Center(child: Text("خطأ: ${snapshot.error}"));
+        if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+        if (snapshot.hasError) return Center(child: Text("خطأ: ${snapshot.error}"));
 
-        try {
-          var docs = snapshot.data?.docs ?? [];
-          var filtered = docs.where((doc) {
+        var docs = snapshot.data?.docs ?? [];
+        var filtered = docs.where((doc) {
+          var data = doc.data() as Map<String, dynamic>;
+          bool matchStatus = _selectedStatus == 'جميع الحالات' || (data['status'] ?? 'pending') == _selectedStatus;
+          String sId = data['sellerId']?.toString() ?? data['ownerId']?.toString() ?? "";
+          String sName = (_sellerNames[sId] ?? "").toLowerCase();
+          return matchStatus && sName.contains(_searchQuery.toLowerCase());
+        }).toList();
+
+        return ListView.builder(
+          itemCount: filtered.length,
+          itemBuilder: (context, index) {
+            var doc = filtered[index];
             var data = doc.data() as Map<String, dynamic>;
-            bool matchStatus = _selectedStatus == 'جميع الحالات' || (data['status'] ?? 'pending') == _selectedStatus;
-            String sId = data['sellerId']?.toString() ?? data['ownerId']?.toString() ?? "";
-            String sName = (_sellerNames[sId] ?? "").toLowerCase();
-            bool matchSearch = sName.contains(_searchQuery.toLowerCase()) || sId.contains(_searchQuery.toLowerCase());
-            return matchStatus && matchSearch;
-          }).toList();
+            String status = data['status'] ?? 'pending';
+            String sId = data['sellerId']?.toString() ?? data['ownerId']?.toString() ?? "unknown";
+            String displayName = _sellerNames[sId] ?? 'ID: ${sId.substring(0, 5)}...';
 
-          return ListView.builder(
-            itemCount: filtered.length,
-            itemBuilder: (context, index) {
-              var doc = filtered[index];
-              var data = doc.data() as Map<String, dynamic>;
-              String status = data['status'] ?? 'pending';
-              String sId = data['sellerId']?.toString() ?? data['ownerId']?.toString() ?? "unknown";
-              String displayName = _sellerNames[sId] ?? 'ID: ${sId.substring(0, 5)}...';
-
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: InkWell( // جعل الكارت بالكامل قابلاً للضغط لفتح التفاصيل
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => InvoiceDetailsScreen(invoiceId: doc.id),
-                      ),
-                    );
-                  },
-                  child: ExpansionTile(
-                    leading: CircleAvatar(
-                      backgroundColor: status == 'paid' ? Colors.green : Colors.orange,
-                      child: const Icon(Icons.receipt, color: Colors.white, size: 18),
-                    ),
-                    title: Text(displayName, style: const TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.bold)),
-                    subtitle: Text("${formatCurrency(data['finalAmount'])} | ${getStatusText(status)}", style: const TextStyle(fontFamily: 'Cairo', fontSize: 12)),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          children: [
-                            _infoLine("تاريخ الإصدار", formatDate(data['creationDate'])),
-                            _infoLine("معرف الفاتورة", doc.id),
-                            const SizedBox(height: 10),
-                            if (status == 'pending')
-                              Row(
-                                children: [
-                                  Expanded(child: _actionBtn("سداد نقدي", Colors.green, () => _markAsPaid(doc.id))),
-                                  const SizedBox(width: 8),
-                                  Expanded(child: _actionBtn("رابط دفع", const Color(0xFFB30000), () => _openPayLink(doc.id))),
-                                ],
-                              ),
-                            const SizedBox(height: 5),
-                            TextButton.icon(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (context) => InvoiceDetailsScreen(invoiceId: doc.id)),
-                                );
-                              },
-                              icon: const Icon(Icons.fullscreen, size: 16),
-                              label: const Text("عرض كامل للفاتورة (طباعة)", style: TextStyle(fontFamily: 'Cairo', fontSize: 12)),
-                            )
-                          ],
-                        ),
-                      )
-                    ],
-                  ),
+            return Card(
+              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              child: ExpansionTile(
+                leading: CircleAvatar(
+                  backgroundColor: status == 'paid' ? Colors.green : Colors.orange,
+                  child: const Icon(Icons.receipt, color: Colors.white, size: 18),
                 ),
-              );
-            },
-          );
-        } catch (e) {
-          return Center(child: Text("حدث خطأ في عرض البيانات: $e"));
-        }
+                title: Text(displayName, style: const TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.bold)),
+                subtitle: Text("${formatCurrency(data['finalAmount'])} | ${getStatusText(status)}", style: const TextStyle(fontFamily: 'Cairo', fontSize: 12)),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      children: [
+                        _infoLine("تاريخ الإصدار", formatDate(data['creationDate'])),
+                        _infoLine("معرف الفاتورة", doc.id),
+                        const SizedBox(height: 10),
+                        if (status == 'pending')
+                          Row(
+                            children: [
+                              Expanded(child: _actionBtn("سداد نقدي", Colors.green, () => _markAsPaid(doc.id))),
+                              const SizedBox(width: 8),
+                              Expanded(child: _actionBtn("رابط دفع", const Color(0xFFB30000), () => _openPayLink(doc.id))),
+                            ],
+                          ),
+                        const SizedBox(height: 10),
+                        // زر صريح وكبير للدخول للتفاصيل لتجنب مشاكل الـ InkWell في الـ Web
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (context) => InvoiceDetailsScreen(invoiceId: doc.id)),
+                              );
+                            },
+                            icon: const Icon(Icons.print, size: 16),
+                            label: const Text("فتح الفاتورة للطباعة", style: TextStyle(fontFamily: 'Cairo')),
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                ],
+              ),
+            );
+          },
+        );
       },
     );
   }
@@ -241,7 +222,7 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
   }
 
   void _openPayLink(String id) async {
-    final url = "https://paymob-test-link.com/pay/$id"; 
+    final url = "https://paymob-test-link.com/pay/$id";
     if (await canLaunchUrl(Uri.parse(url))) {
       await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     }
