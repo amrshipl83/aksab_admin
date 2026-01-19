@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+// استيراد صفحة التفاصيل لفتحها عند الضغط
+import 'invoice_details_screen.dart';
 
 class InvoicesManagementScreen extends StatefulWidget {
   const InvoicesManagementScreen({super.key});
@@ -28,7 +30,7 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
       Map<String, String> tempNames = {};
       for (var doc in snapshot.docs) {
         var data = doc.data();
-        // نستخدم المفاتيح المتوفرة في سجل التاجر
+        // التوافق مع مفاتيح الربط التي أنشأناها سابقاً (supermarketName)
         tempNames[doc.id] = data['supermarketName'] ?? data['merchantName'] ?? 'تاجر غير مسمى';
       }
       if (mounted) setState(() => _sellerNames = tempNames);
@@ -37,7 +39,6 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
     }
   }
 
-  // دالة معالجة العملة المطورة لمنع الشاشة الرمادية
   String formatCurrency(dynamic amount) {
     try {
       double value = 0.0;
@@ -52,20 +53,24 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
     }
   }
 
+  // دالة التاريخ المحدثة لمعالجة صيغة ISO من اللمدا (Z)
   String formatDate(dynamic dateValue) {
     try {
-      if (dateValue == null) return '--';
+      if (dateValue == null || dateValue == "") return '--';
       DateTime dt;
       if (dateValue is Timestamp) {
         dt = dateValue.toDate();
       } else if (dateValue is String) {
-        dt = DateTime.tryParse(dateValue) ?? DateTime.now();
+        // معالجة صيغة ISO 8601 التي تحتوي على حرف T و Z
+        dt = DateTime.parse(dateValue).toLocal();
       } else {
         return '--';
       }
-      return DateFormat('yyyy/MM/dd', 'ar_EG').format(dt);
+      // تنسيق احترافي: السنة/الشهر/اليوم مع الوقت
+      return DateFormat('yyyy/MM/dd | hh:mm a', 'ar_EG').format(dt);
     } catch (e) {
-      return "--";
+      debugPrint("Date error: $e");
+      return dateValue.toString().split('T')[0]; // fallback
     }
   }
 
@@ -126,65 +131,83 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
 
   Widget _buildInvoicesList() {
     return StreamBuilder<QuerySnapshot>(
-      stream: _db.collection('invoices').snapshots(),
+      stream: _db.collection('invoices').orderBy('creationDate', descending: true).snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) 
+        if (snapshot.connectionState == ConnectionState.waiting)
           return const Center(child: CircularProgressIndicator());
-        if (snapshot.hasError) 
+        if (snapshot.hasError)
           return Center(child: Text("خطأ: ${snapshot.error}"));
 
-        // معالجة البيانات داخل try-catch لمنع انهيار الشاشة
         try {
           var docs = snapshot.data?.docs ?? [];
           var filtered = docs.where((doc) {
             var data = doc.data() as Map<String, dynamic>;
             bool matchStatus = _selectedStatus == 'جميع الحالات' || (data['status'] ?? 'pending') == _selectedStatus;
-            
             String sId = data['sellerId']?.toString() ?? data['ownerId']?.toString() ?? "";
             String sName = (_sellerNames[sId] ?? "").toLowerCase();
             bool matchSearch = sName.contains(_searchQuery.toLowerCase()) || sId.contains(_searchQuery.toLowerCase());
-            
             return matchStatus && matchSearch;
           }).toList();
 
           return ListView.builder(
             itemCount: filtered.length,
             itemBuilder: (context, index) {
-              var data = filtered[index].data() as Map<String, dynamic>;
+              var doc = filtered[index];
+              var data = doc.data() as Map<String, dynamic>;
               String status = data['status'] ?? 'pending';
               String sId = data['sellerId']?.toString() ?? data['ownerId']?.toString() ?? "unknown";
-              String displayName = _sellerNames[sId] ?? 'تاجر: ${sId.length > 5 ? sId.substring(0, 5) : sId}';
+              String displayName = _sellerNames[sId] ?? 'ID: ${sId.substring(0, 5)}...';
 
               return Card(
                 margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                child: ExpansionTile(
-                  leading: CircleAvatar(
-                    backgroundColor: status == 'paid' ? Colors.green : Colors.orange,
-                    child: const Icon(Icons.receipt, color: Colors.white, size: 18),
-                  ),
-                  title: Text(displayName, style: const TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.bold)),
-                  subtitle: Text("${formatCurrency(data['finalAmount'])} | ${getStatusText(status)}", style: const TextStyle(fontFamily: 'Cairo', fontSize: 12)),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        children: [
-                          _infoLine("تاريخ الفاتورة", formatDate(data['creationDate'])),
-                          _infoLine("المعرف", filtered[index].id),
-                          if (status == 'pending') ...[
-                            const Divider(),
-                            Row(
-                              children: [
-                                Expanded(child: _actionBtn("سداد نقدي", Colors.green, () => _markAsPaid(filtered[index].id))),
-                                const SizedBox(width: 8),
-                                Expanded(child: _actionBtn("رابط دفع", const Color(0xFFB30000), () => _openPayLink(filtered[index].id))),
-                              ],
-                            )
-                          ]
-                        ],
+                child: InkWell( // جعل الكارت بالكامل قابلاً للضغط لفتح التفاصيل
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => InvoiceDetailsScreen(invoiceId: doc.id),
                       ),
-                    )
-                  ],
+                    );
+                  },
+                  child: ExpansionTile(
+                    leading: CircleAvatar(
+                      backgroundColor: status == 'paid' ? Colors.green : Colors.orange,
+                      child: const Icon(Icons.receipt, color: Colors.white, size: 18),
+                    ),
+                    title: Text(displayName, style: const TextStyle(fontFamily: 'Cairo', fontSize: 14, fontWeight: FontWeight.bold)),
+                    subtitle: Text("${formatCurrency(data['finalAmount'])} | ${getStatusText(status)}", style: const TextStyle(fontFamily: 'Cairo', fontSize: 12)),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          children: [
+                            _infoLine("تاريخ الإصدار", formatDate(data['creationDate'])),
+                            _infoLine("معرف الفاتورة", doc.id),
+                            const SizedBox(height: 10),
+                            if (status == 'pending')
+                              Row(
+                                children: [
+                                  Expanded(child: _actionBtn("سداد نقدي", Colors.green, () => _markAsPaid(doc.id))),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: _actionBtn("رابط دفع", const Color(0xFFB30000), () => _openPayLink(doc.id))),
+                                ],
+                              ),
+                            const SizedBox(height: 5),
+                            TextButton.icon(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => InvoiceDetailsScreen(invoiceId: doc.id)),
+                                );
+                              },
+                              icon: const Icon(Icons.fullscreen, size: 16),
+                              label: const Text("عرض كامل للفاتورة (طباعة)", style: TextStyle(fontFamily: 'Cairo', fontSize: 12)),
+                            )
+                          ],
+                        ),
+                      )
+                    ],
+                  ),
                 ),
               );
             },
@@ -211,14 +234,14 @@ class _InvoicesManagementScreenState extends State<InvoicesManagementScreen> {
 
   Widget _actionBtn(String title, Color col, VoidCallback onTop) {
     return ElevatedButton(
-      style: ElevatedButton.styleFrom(backgroundColor: col, foregroundColor: Colors.white),
+      style: ElevatedButton.styleFrom(backgroundColor: col, foregroundColor: Colors.white, elevation: 0),
       onPressed: onTop,
       child: Text(title, style: const TextStyle(fontFamily: 'Cairo', fontSize: 11)),
     );
   }
 
   void _openPayLink(String id) async {
-    final url = "https://paymob-test-link.com/pay/$id"; // رابط تجريبي لبكرة
+    final url = "https://paymob-test-link.com/pay/$id"; 
     if (await canLaunchUrl(Uri.parse(url))) {
       await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     }
