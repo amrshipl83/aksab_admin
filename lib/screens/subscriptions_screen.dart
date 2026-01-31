@@ -12,19 +12,15 @@ class SubscriptionsScreen extends StatefulWidget {
 class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   final _db = FirebaseFirestore.instance;
 
-  // دالة لجلب الباقات الحالية من الفايرستور
   Stream<QuerySnapshot> _getPlans() {
     return _db.collection('subscription_settings').orderBy('price').snapshots();
   }
 
-  // دالة لتحديث قيمة معينة في الباقة (ديناميكياً)
   Future<void> _updateFeature(String docId, String featureKey, dynamic newValue) async {
     try {
-      // جلب الوثيقة أولاً لتعديل المصفوفة بداخلها
       DocumentSnapshot doc = await _db.collection('subscription_settings').doc(docId).get();
-      List features = doc['features'];
+      List features = List.from(doc['features']);
       
-      // البحث عن العنصر وتعديله
       for (var f in features) {
         if (f['key'] == featureKey) {
           f['value'] = newValue;
@@ -39,7 +35,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   }
 
   void _showSnackBar(String msg, Color color) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: color));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg, style: const TextStyle(fontFamily: 'Cairo')), backgroundColor: color));
   }
 
   @override
@@ -51,8 +47,9 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         backgroundColor: const Color(0xFFB21F2D),
         centerTitle: true,
       ),
-      body: Directionality(
-        textDirection: TextDirection.rtl,
+      body: Localizations.override(
+        context: context,
+        locale: const Locale('ar', 'EG'),
         child: StreamBuilder<QuerySnapshot>(
           stream: _getPlans(),
           builder: (context, snapshot) {
@@ -62,8 +59,8 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
             return GridView.builder(
               padding: const EdgeInsets.all(20),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3, // 3 باقات بجانب بعض في الويب
-                childAspectRatio: 0.7,
+                crossAxisCount: 3, 
+                childAspectRatio: 0.75,
                 crossAxisSpacing: 20,
                 mainAxisSpacing: 20,
               ),
@@ -85,7 +82,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: const [BoxShadow(color: Colors.black10, blurRadius: 10)],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10)],
       ),
       child: Column(
         children: [
@@ -96,18 +93,15 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
               borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: Center(
-              child: Text(plan['planName'], style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              child: Text(plan['planName'], style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
             ),
           ),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(15),
               children: [
-                _buildEditableRow("السعر (EGP)", plan['price'].toString(), (val) {
-                   _db.collection('subscription_settings').doc(id).update({'price': double.parse(val)});
-                }),
+                _buildPriceInfo(plan['price'].toString()),
                 const Divider(),
-                // عرض المميزات الديناميكية
                 ...(plan['features'] as List).map((feature) {
                   return _buildFeatureToggle(id, feature);
                 }).toList(),
@@ -115,34 +109,31 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.all(15),
-            child: Text("معرف الباقة: $id", style: const TextStyle(fontSize: 10, color: Colors.grey)),
+            padding: const EdgeInsets.all(10),
+            child: Text("ID: $id", style: const TextStyle(fontSize: 10, color: Colors.grey)),
           )
         ],
       ),
     );
   }
 
-  Widget _buildEditableRow(String label, String value, Function(String) onSave) {
+  Widget _buildPriceInfo(String price) {
     return ListTile(
-      title: Text(label, style: const TextStyle(fontSize: 14)),
-      subtitle: Text(value, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-      trailing: IconButton(icon: const Icon(Icons.edit, size: 20), onPressed: () {
-        // هنا تفتح Dialog لتعديل السعر
-      }),
+      title: const Text("السعر المستحق", style: TextStyle(fontSize: 13, fontFamily: 'Cairo')),
+      subtitle: Text("$price EGP", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.blue)),
+      leading: const Icon(Icons.monetization_on, color: Colors.amber),
     );
   }
 
   Widget _buildFeatureToggle(String docId, Map<String, dynamic> feature) {
-    bool isEnabled = feature['value'] is bool ? feature['value'] : (feature['value'] as int) > 0;
+    bool isEnabled = (feature['value'] is bool) ? feature['value'] : (feature['value'] > 0);
 
     return SwitchListTile(
-      title: Text(feature['label'], style: const TextStyle(fontSize: 13)),
+      title: Text(feature['label'], style: const TextStyle(fontSize: 13, fontFamily: 'Cairo')),
       value: isEnabled,
       activeColor: Colors.green,
       onChanged: (val) {
-        // لو كانت ميزة رقمية (زي البانرات) بنخليها 1 أو 0، لو بولين بنخليها true/false
-        dynamic newValue = feature['value'] is int ? (val ? 1 : 0) : val;
+        dynamic newValue = (feature['value'] is int) ? (val ? 1 : 0) : val;
         _updateFeature(docId, feature['key'], newValue);
       },
     );
@@ -150,14 +141,21 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
   Widget _buildEmptyState() {
     return Center(
-      child: ElevatedButton(
-        onPressed: _createDefaultPlans,
-        child: const Text("إنشاء الباقات الافتراضية لأول مرة"),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Text("لا توجد باقات حالياً", style: TextStyle(fontFamily: 'Cairo', fontSize: 18)),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: _createDefaultPlans,
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB21F2D)),
+            child: const Text("إنشاء الباقات الافتراضية", style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }
 
-  // دالة لإنشاء بيانات تجريبية لو المجموعة فاضية
   Future<void> _createDefaultPlans() async {
     List<Map<String, dynamic>> defaults = [
       {
