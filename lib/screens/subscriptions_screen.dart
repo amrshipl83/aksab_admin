@@ -12,11 +12,23 @@ class SubscriptionsScreen extends StatefulWidget {
 class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   final _db = FirebaseFirestore.instance;
 
+  // دالة جلب البيانات
   Stream<QuerySnapshot> _getPlans() {
     return _db.collection('subscription_settings').orderBy('price').snapshots();
   }
 
-  Future<void> _updateFeature(String docId, String featureKey, dynamic newValue) async {
+  // دالة تحديث الحقول الأساسية (مثل السعر أو اسم الباقة)
+  Future<void> _updateBasicField(String docId, String fieldName, dynamic newValue) async {
+    try {
+      await _db.collection('subscription_settings').doc(docId).update({fieldName: newValue});
+      _showSnackBar("تم تحديث $fieldName بنجاح", Colors.green);
+    } catch (e) {
+      _showSnackBar("خطأ في التحديث: $e", Colors.red);
+    }
+  }
+
+  // دالة تحديث المميزات داخل المصفوفة (Features Array)
+  Future<void> _updateFeatureValue(String docId, String featureKey, dynamic newValue) async {
     try {
       DocumentSnapshot doc = await _db.collection('subscription_settings').doc(docId).get();
       List features = List.from(doc['features']);
@@ -28,10 +40,41 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       }
 
       await _db.collection('subscription_settings').doc(docId).update({'features': features});
-      _showSnackBar("تم التحديث بنجاح", Colors.green);
+      _showSnackBar("تم تحديث الميزة بنجاح", Colors.green);
     } catch (e) {
       _showSnackBar("خطأ في التحديث: $e", Colors.red);
     }
+  }
+
+  // نافذة منبثقة لتعديل القيم النصية أو الرقمية
+  void _showEditDialog(String docId, String title, dynamic currentValue, Function(dynamic) onConfirm) {
+    TextEditingController controller = TextEditingController(text: currentValue.toString());
+    showDialog(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: Text("تعديل $title", style: const TextStyle(fontFamily: 'Cairo')),
+          content: TextFormField(
+            controller: controller,
+            decoration: const InputDecoration(border: OutlineInputBorder()),
+            keyboardType: currentValue is num ? TextInputType.number : TextInputType.text,
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
+            ElevatedButton(
+              onPressed: () {
+                dynamic val = controller.text;
+                if (currentValue is num) val = num.tryParse(controller.text) ?? currentValue;
+                onConfirm(val);
+                Navigator.pop(context);
+              },
+              child: const Text("حفظ"),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showSnackBar(String msg, Color color) {
@@ -47,9 +90,8 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         backgroundColor: const Color(0xFFB21F2D),
         centerTitle: true,
       ),
-      body: Localizations.override(
-        context: context,
-        locale: const Locale('ar', 'EG'),
+      body: Directionality(
+        textDirection: TextDirection.rtl,
         child: StreamBuilder<QuerySnapshot>(
           stream: _getPlans(),
           builder: (context, snapshot) {
@@ -60,7 +102,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
               padding: const EdgeInsets.all(20),
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 3, 
-                childAspectRatio: 0.75,
+                childAspectRatio: 0.7,
                 crossAxisSpacing: 20,
                 mainAxisSpacing: 20,
               ),
@@ -86,72 +128,80 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       ),
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.all(15),
-            decoration: BoxDecoration(
-              color: plan['planName'] == 'الذهبية' ? const Color(0xFFB21F2D) : const Color(0xFF2c3e50),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: Center(
-              child: Text(plan['planName'], style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+          // رأس الكارت (اسم الباقة قابل للتعديل)
+          InkWell(
+            onTap: () => _showEditDialog(id, "اسم الباقة", plan['planName'], (v) => _updateBasicField(id, 'planName', v)),
+            child: Container(
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                color: plan['planName'] == 'الذهبية' ? const Color(0xFFB21F2D) : const Color(0xFF2c3e50),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Center(
+                child: Text(plan['planName'], style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+              ),
             ),
           ),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.all(15),
               children: [
-                _buildPriceInfo(plan['price'].toString()),
+                // تعديل السعر
+                _buildEditableTile("السعر المستحق", "${plan['price']} EGP", Icons.monetization_on, () {
+                  _showEditDialog(id, "السعر", plan['price'], (v) => _updateBasicField(id, 'price', v));
+                }),
+                // تعديل المدة
+                _buildEditableTile("مدة الباقة (أيام)", "${plan['durationDays']} يوم", Icons.timer, () {
+                  _showEditDialog(id, "عدد الأيام", plan['durationDays'], (v) => _updateBasicField(id, 'durationDays', v));
+                }),
                 const Divider(),
+                // قائمة المميزات
                 ...(plan['features'] as List).map((feature) {
-                  return _buildFeatureToggle(id, feature);
+                  return _buildFeatureControl(id, feature);
                 }).toList(),
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(10),
-            child: Text("ID: $id", style: const TextStyle(fontSize: 10, color: Colors.grey)),
-          )
         ],
       ),
     );
   }
 
-  Widget _buildPriceInfo(String price) {
+  Widget _buildEditableTile(String label, String value, IconData icon, VoidCallback onTap) {
     return ListTile(
-      title: const Text("السعر المستحق", style: TextStyle(fontSize: 13, fontFamily: 'Cairo')),
-      subtitle: Text("$price EGP", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.blue)),
-      leading: const Icon(Icons.monetization_on, color: Colors.amber),
+      onTap: onTap,
+      title: Text(label, style: const TextStyle(fontSize: 12, fontFamily: 'Cairo', color: Colors.grey)),
+      subtitle: Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black87)),
+      leading: Icon(icon, color: const Color(0xFFB21F2D)),
+      trailing: const Icon(Icons.edit, size: 16, color: Colors.blue),
     );
   }
 
-  Widget _buildFeatureToggle(String docId, Map<String, dynamic> feature) {
-    bool isEnabled = (feature['value'] is bool) ? feature['value'] : (feature['value'] > 0);
+  Widget _buildFeatureControl(String docId, Map<String, dynamic> feature) {
+    bool isBool = feature['value'] is bool;
 
-    return SwitchListTile(
-      title: Text(feature['label'], style: const TextStyle(fontSize: 13, fontFamily: 'Cairo')),
-      value: isEnabled,
-      activeColor: Colors.green,
-      onChanged: (val) {
-        dynamic newValue = (feature['value'] is int) ? (val ? 1 : 0) : val;
-        _updateFeature(docId, feature['key'], newValue);
-      },
-    );
+    if (isBool) {
+      return SwitchListTile(
+        title: Text(feature['label'], style: const TextStyle(fontSize: 13, fontFamily: 'Cairo')),
+        value: feature['value'],
+        onChanged: (val) => _updateFeatureValue(docId, feature['key'], val),
+      );
+    } else {
+      // ميزة رقمية (مثل عدد البانرات)
+      return ListTile(
+        onTap: () => _showEditDialog(docId, feature['label'], feature['value'], (v) => _updateFeatureValue(docId, feature['key'], v)),
+        title: Text(feature['label'], style: const TextStyle(fontSize: 13, fontFamily: 'Cairo')),
+        trailing: Text(feature['value'].toString(), style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+        leading: const Icon(Icons.add_task, size: 20),
+      );
+    }
   }
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text("لا توجد باقات حالياً", style: TextStyle(fontFamily: 'Cairo', fontSize: 18)),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: _createDefaultPlans,
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB21F2D)),
-            child: const Text("إنشاء الباقات الافتراضية", style: TextStyle(color: Colors.white)),
-          ),
-        ],
+      child: ElevatedButton(
+        onPressed: _createDefaultPlans,
+        child: const Text("تأسيس نظام الباقات لأول مرة"),
       ),
     );
   }
