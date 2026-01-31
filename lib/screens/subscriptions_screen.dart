@@ -229,7 +229,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     ];
 
     for (var plan in defaults) {
-      await _db.collection('subscription_settings').add(plan);
+      await _db.collection('subscription_plans').add(plan);
     }
   }
 }
