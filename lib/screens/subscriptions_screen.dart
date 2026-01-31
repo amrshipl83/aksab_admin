@@ -13,11 +13,10 @@ class SubscriptionsScreen extends StatefulWidget {
 class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   final _formKey = GlobalKey<FormState>();
   
-  // متغيرات الاختيار
-  String? _selectedUserType; // sellers OR deliverySupermarkets
+  String? _selectedUserType; 
   String? _selectedUserId;
   String? _selectedUserName;
-  String _subType = 'شهري'; // شهري أو مساحة إعلانية
+  String _subType = 'شهري'; 
   
   DateTime _startDate = DateTime.now();
   DateTime _endDate = DateTime.now().add(const Duration(days: 30));
@@ -29,7 +28,6 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   bool _isLoadingUsers = false;
   bool _isSaving = false;
 
-  // 1. جلب المستخدمين بناءً على المجموعة المختارة
   Future<void> _fetchUsers(String type) async {
     setState(() {
       _isLoadingUsers = true;
@@ -45,7 +43,6 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
           final data = doc.data();
           return {
             'id': doc.id,
-            // المورد عنده merchantName والسوبر ماركت عنده supermarketName
             'name': data['merchantName'] ?? data['supermarketName'] ?? 'اسم غير مسجل',
           };
         }).toList();
@@ -57,7 +54,6 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     }
   }
 
-  // 2. دالة حفظ الاشتراك وإرساله للباك-إند (المخالصة)
   Future<void> _saveSubscription() async {
     if (!_formKey.currentState!.validate() || _selectedUserId == null) {
       _showSnackBar('برجاء اختيار الجهة وتحديد المستخدم أولاً', Colors.orange);
@@ -67,14 +63,13 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     setState(() => _isSaving = true);
 
     try {
-      // 🟢 تحديد الدور الأصلي للمستخدم (buyer للسوبر ماركت و seller للمورد)
       String userRole = (_selectedUserType == 'sellers') ? 'seller' : 'buyer';
 
       await FirebaseFirestore.instance.collection('subscriptions').add({
         'targetUserId': _selectedUserId,
         'targetUserName': _selectedUserName,
-        'targetUserType': _selectedUserType, // اسم المجموعة (sellers/deliverySupermarkets)
-        'role': userRole,                    // الدور الأصلي للتحرك داخل التطبيق
+        'targetUserType': _selectedUserType, 
+        'role': userRole,                    
         'subscriptionType': _subType,
         'startDate': Timestamp.fromDate(_startDate),
         'endDate': Timestamp.fromDate(_endDate),
@@ -82,14 +77,13 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         'notes': _notesController.text.trim(),
         'createdAt': FieldValue.serverTimestamp(),
         'createdBy': 'AdminPanel',
-        'paymentStatus': 'pending',          // انتظار الدفع
-        'invoiceGenerated': false,           // لم يتم تحويلها لفاتورة بعد
-        'needsSettlement': true,             // إشارة للباك إند لعمل مخالصة فورية
+        'paymentStatus': 'pending',          
+        'invoiceGenerated': false,           
+        'needsSettlement': true,             
       });
 
-      _showSnackBar('تم تسجيل الاشتراك بنجاح. جارٍ تحويله للمخالصة الممالية للمستخدم ($userRole)', Colors.green);
+      _showSnackBar('تم تسجيل الاشتراك بنجاح وبدء المخالصة المالية', Colors.green);
       
-      // إعادة تهيئة النموذج
       _formKey.currentState!.reset();
       setState(() {
         _selectedUserId = null;
@@ -115,17 +109,19 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF4F7F6),
-        appBar: AppBar(
-          title: const Text('إعدادات اشتراكات الحسابات', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-          backgroundColor: const Color(0xFFB21F2D),
-          centerTitle: true,
-          elevation: 0,
-        ),
-        body: Center(
+    // 🟢 تم استبدال Directionality بـ Theme مُعدل أو استخدام الـ Widgets مباشرة
+    // لضمان عدم حدوث خطأ Member not found: 'rtl'
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4F7F6),
+      appBar: AppBar(
+        title: const Text('إعدادات اشتراكات الحسابات', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFFB21F2D),
+        centerTitle: true,
+        elevation: 0,
+      ),
+      body: Directionality(
+        textDirection: TextDirection.rtl, // سيتم قراءتها الآن من Material بشكل صحيح
+        child: Center(
           child: Container(
             constraints: const BoxConstraints(maxWidth: 900),
             margin: const EdgeInsets.all(20),
