@@ -107,10 +107,8 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     );
   }
 
-  @override
+    @override
   Widget build(BuildContext context) {
-    // 🟢 تم استبدال Directionality بـ Theme مُعدل أو استخدام الـ Widgets مباشرة
-    // لضمان عدم حدوث خطأ Member not found: 'rtl'
     return Scaffold(
       backgroundColor: const Color(0xFFF4F7F6),
       appBar: AppBar(
@@ -119,34 +117,41 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         centerTitle: true,
         elevation: 0,
       ),
-      body: Directionality(
-        textDirection: TextDirection.rtl, // سيتم قراءتها الآن من Material بشكل صحيح
-        child: Center(
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 900),
-            margin: const EdgeInsets.all(20),
-            padding: const EdgeInsets.all(30),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 15, offset: Offset(0, 5))],
-            ),
-            child: Form(
-              key: _formKey,
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHeaderSection(),
-                    const Divider(height: 40),
-                    _buildUserSelection(),
-                    const SizedBox(height: 25),
-                    _buildSubscriptionDetails(),
-                    const SizedBox(height: 30),
-                    _buildAmountSection(),
-                    const SizedBox(height: 40),
-                    _buildSubmitButton(),
-                  ],
+      // 🟢 الحل البديل: استخدام Locale في الـ Theme لفرض الاتجاه بدون استخدام Enum فيه مشاكل
+      body: Theme(
+        data: Theme.of(context).copyWith(
+          visualDensity: VisualDensity.adaptivePlatformDensity,
+        ),
+        child: Localizations.override(
+          context: context,
+          locale: const Locale('ar', 'EG'), // يفرض الاتجاه العربي (RTL) تلقائياً
+          child: Center(
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 900),
+              margin: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(30),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 15, offset: Offset(0, 5))],
+              ),
+              child: Form(
+                key: _formKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeaderSection(),
+                      const Divider(height: 40),
+                      _buildUserSelection(),
+                      const SizedBox(height: 25),
+                      _buildSubscriptionDetails(),
+                      const SizedBox(height: 30),
+                      _buildAmountSection(),
+                      const SizedBox(height: 40),
+                      _buildSubmitButton(),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -155,6 +160,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
       ),
     );
   }
+
 
   Widget _buildHeaderSection() {
     return Row(
