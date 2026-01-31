@@ -59700,7 +59700,7 @@ wp(a,b,c){return this.aG4(a,b,c)},
 aG4(a,b,c){var s=0,r=A.A(t.H),q=1,p=[],o=this,n,m,l,k,j
 var $async$wp=A.w(function(d,e){if(d===1){p.push(e)
 s=q}for(;;)switch(s){case 0:q=3
-m=o.d.ao("subscription_settings").bj(a)
+m=o.d.ao("subscription_plans").bj(a)
 l=A.hC(A.a7([b,c],t.K,t.X))
 l.toString
 s=6
@@ -59726,12 +59726,12 @@ var $async$wr=A.w(function(d,a0){if(d===1){p.push(a0)
 s=q}for(;;)switch(s){case 0:q=3
 j=o.d
 s=6
-return A.t(j.ao("subscription_settings").bj(a).dT(0),$async$wr)
+return A.t(j.ao("subscription_plans").bj(a).dT(0),$async$wr)
 case 6:n=a0
 i=n
 m=A.eB(A.dn(i.b.aV(0,"features"),i.a),!0,t.z)
 for(i=m,h=i.length,g=0;g<i.length;i.length===h||(0,A.C)(i),++g){l=i[g]
-if(J.d(J.l(l,"key"),b))J.b3(l,"value",c)}j=j.ao("subscription_settings").bj(a)
+if(J.d(J.l(l,"key"),b))J.b3(l,"value",c)}j=j.ao("subscription_plans").bj(a)
 i=A.hC(A.a7(["features",m],t.K,t.X))
 i.toString
 s=7
@@ -59757,7 +59757,7 @@ A.eF(s,s,!0,s,new A.b1M(b,new A.b4(new A.cb(r,B.ba,B.aO),q),c,d),p,s,!0,t.z)},
 GO(a,b){var s=null
 this.c.Y(t.J).f.bY(A.fJ(s,s,s,b,s,B.I,s,A.O(a,s,s,s,s,B.aQ,s,s,s),s,B.at,s,s,s,s,s,s,s,s,s,s))},
 J(a){var s=null
-return A.f9(A.fb(s,B.eV,s,!0,s,s,B.bit),B.pX,A.IK(A.d2(new A.b1O(this),this.d.ao("subscription_settings").rs("price").cp(),t.l),B.bC),s)},
+return A.f9(A.fb(s,B.eV,s,!0,s,s,B.bit),B.pX,A.IK(A.d2(new A.b1O(this),this.d.ao("subscription_plans").rs("price").cp(),t.l),B.bC),s)},
 anq(a,b){var s,r,q,p=this,o=null,n="planName",m=A.br(20),l=A.b([new A.bZ(0,B.az,A.am(B.n.aB(25.5),B.T.A()>>>16&255,B.T.A()>>>8&255,B.T.A()&255),B.H,10)],t.V),k=J.d(b.h(0,n),"\u0627\u0644\u0630\u0647\u0628\u064a\u0629")?B.eV:B.jd
 k=A.hs(!1,o,!0,A.cS(o,A.ew(A.O(b.h(0,n),o,o,o,o,B.Ru,o,o,o),o,o),B.X,o,o,new A.cB(k,o,o,B.TP,o,o,B.aH),o,o,o,B.fy,o,o,o),o,!0,o,o,o,o,o,o,o,o,o,o,new A.b1G(p,a,b),o,o,o,o,o,o,o)
 s=t.p
