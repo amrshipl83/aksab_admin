@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'Financial/financial_summary_screen.dart'; // ✅ مسار صفحة الإيرادات
-import 'Financial/invoices_management_screen.dart'; // ✅ مسار صفحة الفواتير الجديد
+import 'Financial/invoices_management_screen.dart'; // ✅ مسار صفحة الفواتير
+import 'subscriptions_screen.dart'; // ✅ إضافة استيراد صفحة الاشتراكات الجديدة
 
 class FinancialDashboard extends StatelessWidget {
   const FinancialDashboard({super.key});
@@ -78,32 +79,40 @@ class FinancialDashboard extends StatelessWidget {
               children: [
                 // 1. كرت الإيرادات
                 _buildMenuCard(
-                  context, 
-                  "إيرادات", 
-                  Icons.monetization_on, 
+                  context,
+                  "إيرادات",
+                  Icons.monetization_on,
                   const Color(0xFFF57C00),
                   onTap: () => Navigator.push(
-                    context, 
-                    MaterialPageRoute(builder: (context) => const FinancialSummaryScreen())
-                  ),
+                      context,
+                      MaterialPageRoute(builder: (context) => const FinancialSummaryScreen())),
                 ),
 
-                // 2. كرت الفواتير (تم الربط الآن)
+                // 2. كرت الفواتير
                 _buildMenuCard(
-                  context, 
-                  "فواتير", 
-                  Icons.file_copy, 
+                  context,
+                  "فواتير",
+                  Icons.file_copy,
                   const Color(0xFF1976D2),
                   onTap: () => Navigator.push(
-                    context, 
-                    MaterialPageRoute(builder: (context) => const InvoicesManagementScreen())
-                  ),
+                      context,
+                      MaterialPageRoute(builder: (context) => const InvoicesManagementScreen())),
                 ),
 
-                // بقية الكروت (سيتم ربطها لاحقاً)
+                // 3. كرت إعدادات الحسابات (تم الربط بصفحة الاشتراكات الآن)
+                _buildMenuCard(
+                  context,
+                  "إعدادات الحسابات",
+                  Icons.settings_applications,
+                  Colors.blueGrey,
+                  onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const SubscriptionsScreen())),
+                ),
+
+                // 4. بقية الكروت (للتطوير لاحقاً)
                 _buildMenuCard(context, "الحركة المالية", Icons.analytics, const Color(0xFF388E3C)),
                 _buildMenuCard(context, "الأرباح والخسائر", Icons.trending_up, const Color(0xFF7B1FA2)),
-                _buildMenuCard(context, "إعدادات الحسابات", Icons.settings_applications, Colors.blueGrey),
                 _buildMenuCard(context, "التقارير الضريبية", Icons.description, Colors.redAccent),
               ],
             ),
