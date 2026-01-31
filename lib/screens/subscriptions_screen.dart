@@ -14,13 +14,13 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
   // دالة جلب البيانات
   Stream<QuerySnapshot> _getPlans() {
-    return _db.collection('subscription_settings').orderBy('price').snapshots();
+    return _db.collection('subscription_plans').orderBy('price').snapshots();
   }
 
   // دالة تحديث الحقول الأساسية (مثل السعر أو اسم الباقة)
   Future<void> _updateBasicField(String docId, String fieldName, dynamic newValue) async {
     try {
-      await _db.collection('subscription_settings').doc(docId).update({fieldName: newValue});
+      await _db.collection('subscription_plans').doc(docId).update({fieldName: newValue});
       _showSnackBar("تم تحديث $fieldName بنجاح", Colors.green);
     } catch (e) {
       _showSnackBar("خطأ في التحديث: $e", Colors.red);
@@ -30,7 +30,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   // دالة تحديث المميزات داخل المصفوفة (Features Array)
   Future<void> _updateFeatureValue(String docId, String featureKey, dynamic newValue) async {
     try {
-      DocumentSnapshot doc = await _db.collection('subscription_settings').doc(docId).get();
+      DocumentSnapshot doc = await _db.collection('subscription_plans').doc(docId).get();
       List features = List.from(doc['features']);
       
       for (var f in features) {
@@ -39,7 +39,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
         }
       }
 
-      await _db.collection('subscription_settings').doc(docId).update({'features': features});
+      await _db.collection('subscription_plans').doc(docId).update({'features': features});
       _showSnackBar("تم تحديث الميزة بنجاح", Colors.green);
     } catch (e) {
       _showSnackBar("خطأ في التحديث: $e", Colors.red);
