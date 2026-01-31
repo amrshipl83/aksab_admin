@@ -59782,7 +59782,7 @@ n=q.d,p=0
 case 2:if(!(p<2)){s=4
 break}o=j[p]
 s=5
-return A.t(n.ao("subscription_settings").v(0,o),$async$EV)
+return A.t(n.ao("subscription_plans").v(0,o),$async$EV)
 case 5:case 3:++p
 s=2
 break
