@@ -204,8 +204,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
           // 7. المستهلكين (أصفر ذهبي مميز)
           _buildSidebarItem(Icons.people_alt, "المستهلكين", () {
-             // سنقوم ببرمجتها الآن
-          }, color: Colors.yellowAccent),
+  Navigator.push(context, MaterialPageRoute(builder: (context) => const ConsumersPage()));
+}, color: Colors.yellowAccent),
+
 
           // 8. إدارة الدليفري (أخضر ليموني)
           if (isDelivery)
