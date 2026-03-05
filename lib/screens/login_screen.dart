@@ -84,7 +84,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
         androidInstallApp: true,
         androidMinimumVersion: '12',
         // ✅ المفتاح السحري: استخدام دومين الهوستنج كبوابة بديلة للـ Dynamic Links
-        dynamicLinkDomain: 'aksabeg-b6571.firebaseapp.com', 
+      
       );
 
       await FirebaseAuth.instance.sendSignInLinkToEmail(
