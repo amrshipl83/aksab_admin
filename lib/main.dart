@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'screens/login_screen.dart';
-import 'screens/dashboard_screen.dart'; // تأكد من إضافة هذا السطر
+import 'screens/dashboard_screen.dart'; 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,13 +27,25 @@ class AksabAdminApp extends StatelessWidget {
       locale: const Locale('ar', 'EG'),
       theme: ThemeData(
         primarySwatch: Colors.blue,
-        fontFamily: 'Tajawal', // غيرناه لـ Tajawal ليناسب تصميمك الأصلي
+        fontFamily: 'Tajawal', 
         useMaterial3: true,
       ),
       initialRoute: '/',
-      routes: {
-        '/': (context) => const LoginScreen(),
-        '/admin': (context) => const DashboardScreen(), // ربط الشاشة الحقيقية هنا
+      // ✅ الحل الجذري: نستخدم onGenerateRoute لاستقبال الـ Role وتمريره
+      onGenerateRoute: (settings) {
+        if (settings.name == '/') {
+          return MaterialPageRoute(builder: (context) => const LoginScreen());
+        }
+        
+        if (settings.name == '/admin') {
+          // هنا بنستلم الـ Role اللي باعتينه من صفحة الـ Login
+          final role = settings.arguments as String? ?? 'guest'; // لو مبعتش حاجة خليه ضيف (أمان)
+          
+          return MaterialPageRoute(
+            builder: (context) => DashboardScreen(userRole: role),
+          );
+        }
+        return null;
       },
     );
   }
