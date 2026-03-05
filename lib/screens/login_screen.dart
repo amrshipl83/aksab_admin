@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dashboard_screen.dart'; // تأكد من استيراد الداشبورد
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,113 +13,113 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  String _errorMsg = '';
-  String _uid = '';
   bool _isLoading = false;
+  String _message = '';
 
-  Future<void> _login() async {
+  Future<void> _handleLogin() async {
     setState(() {
       _isLoading = true;
-      _errorMsg = '';
-      _uid = '';
+      _message = '';
     });
 
     try {
-      // 1. تسجيل الدخول عبر Firebase Auth
+      // 1. تسجيل الدخول الأساسي
       UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
-      String uid = userCredential.user!.uid;
-      setState(() => _uid = 'UID: $uid');
+      User? user = userCredential.user;
 
-      // 2. التحقق من الصلاحيات في مجموعة admins
-      DocumentSnapshot adminDoc = await FirebaseFirestore.instance
-          .collection('admins')
-          .doc(uid)
-          .get();
+      if (user != null) {
+        // تحديث حالة المستخدم للتأكد من آخر وضع للـ Verification
+        await user.reload();
+        user = FirebaseAuth.instance.currentUser;
 
-      if (!adminDoc.exists) {
-        setState(() => _errorMsg = 'ليست لديك صلاحية الدخول.');
-        return;
-      }
-
-      var data = adminDoc.data() as Map<String, dynamic>;
-      if (data['role'] == 'superadmin') {
-        // الانتقال للوحة التحكم (سنقوم بإنشائها)
-        if (mounted) {
-           Navigator.pushReplacementNamed(context, '/admin');
+        // 2. التحقق من مصادقة إيميل زوهو
+        if (!user!.emailVerified) {
+          // لو مش متفعل، نبعت رابط التحقق فوراً
+          await user.sendEmailVerification();
+          setState(() {
+            _message = "⚠️ حسابك غير موثق. تم إرسال رابط تأكيد جديد إلى بريدك في Zoho. يرجى الضغط عليه ثم حاول الدخول مجدداً.";
+          });
+          await FirebaseAuth.instance.signOut(); // نخرجه لحد ما يفعل
+          return;
         }
-      } else {
-        setState(() => _errorMsg = 'تم تسجيل الدخول ولكن ليست لديك الصلاحيات الكافية.');
+
+        // 3. لو مفعل، نجيب الـ Role من Firestore
+        DocumentSnapshot adminDoc = await FirebaseFirestore.instance
+            .collection('admins')
+            .doc(user.uid)
+            .get();
+
+        if (adminDoc.exists) {
+          String role = adminDoc.get('role') ?? 'user';
+          
+          if (mounted) {
+            // الدخول للوحة وتمرير الصلاحية
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => DashboardScreen(userRole: role)),
+            );
+          }
+        } else {
+          setState(() => _message = "❌ خطأ: لم يتم العثور على صلاحيات لهذا الحساب.");
+        }
       }
     } on FirebaseAuthException catch (e) {
-      setState(() => _errorMsg = 'خطأ: ${e.message}');
+      String errorText = "حدث خطأ في الدخول";
+      if (e.code == 'user-not-found') errorText = "المستخدم غير موجود";
+      else if (e.code == 'wrong-password') errorText = "كلمة المرور غير صحيحة";
+      setState(() => _message = "❌ $errorText");
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: const Color(0xFFF2F4F8),
       body: Center(
         child: Container(
-          width: 350,
+          width: 400,
           padding: const EdgeInsets.all(30),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 15)],
+            borderRadius: BorderRadius.circular(15),
+            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20)],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text("إدارة أسواق أكسب", 
-                style: TextStyle(color: Color(0xFF007BFF), fontSize: 24, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 20),
+              const Text("لوحة تحكم أكسب", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF1F2937))),
+              const SizedBox(height: 30),
               TextField(
                 controller: _emailController,
-                decoration: const InputDecoration(
-                  hintText: "البريد الإلكتروني",
-                  border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))),
-                ),
+                decoration: const InputDecoration(labelText: "البريد الإلكتروني (Zoho)", border: OutlineInputBorder()),
               ),
-              const SizedBox(height: 15),
+              const SizedBox(height: 20),
               TextField(
                 controller: _passwordController,
                 obscureText: true,
-                decoration: const InputDecoration(
-                  hintText: "كلمة المرور",
-                  border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(8))),
-                ),
+                decoration: const InputDecoration(labelText: "كلمة المرور", border: OutlineInputBorder()),
               ),
-              const SizedBox(height: 20),
-              _isLoading 
-                ? const CircularProgressIndicator()
-                : SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _login,
+              const SizedBox(height: 25),
+              _isLoading
+                  ? const CircularProgressIndicator()
+                  : ElevatedButton(
+                      onPressed: _handleLogin,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF007BFF),
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        backgroundColor: const Color(0xFF1F2937),
+                        minimumSize: const Size(double.infinity, 55),
                       ),
-                      child: const Text("دخول", style: TextStyle(color: Colors.white, fontSize: 16)),
+                      child: const Text("دخول للمنصة", style: TextStyle(color: Colors.white, fontSize: 18)),
                     ),
-                  ),
-              if (_errorMsg.isNotEmpty)
+              if (_message.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.only(top: 15),
-                  child: Text(_errorMsg, style: const TextStyle(color: Colors.red, fontSize: 14)),
-                ),
-              if (_uid.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 15),
-                  child: Text(_uid, style: const TextStyle(color: Colors.green, fontSize: 14)),
+                  padding: const EdgeInsets.only(top: 20),
+                  child: Text(_message, textAlign: TextAlign.center, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w500)),
                 ),
             ],
           ),
