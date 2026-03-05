@@ -13,10 +13,13 @@ import '../screens/delivery_management_screen.dart';
 import '../screens/hr_management_screen.dart';
 import '../screens/marketing/marketing_management_screen.dart';
 import '../screens/inventory/inventory_hub.dart';
-import '../screens/financial_dashboard_screen.dart'; // ✅ إضافة استيراد الإدارة المالية
+import '../screens/financial_dashboard_screen.dart';
+import '../screens/team_management_screen.dart'; // ✅ استيراد صفحة إضافة المديرين
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  final String userRole; // ✅ استقبال الدور (Role) من صفحة اللوجن
+
+  const DashboardScreen({super.key, required this.userRole});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -80,7 +83,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           if (!isMobile)
             Container(
-              width: 90,
+              width: 100, // وسعنا العرض قليلاً ليناسب الأيقونات الجديدة
               color: const Color(0xFF1F2937),
               child: _buildSidebarContent(context),
             ),
@@ -90,11 +93,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Column(
                 children: [
                   Text(
-                    "لوحة التحكم",
-                    style: TextStyle(
-                      fontSize: isMobile ? 24 : 28,
+                    "لوحة التحكم - ${widget.userRole}", // عرض الدور للتأكد أثناء التجربة
+                    style: const TextStyle(
+                      fontSize: 28,
                       fontWeight: FontWeight.bold,
-                      color: const Color(0xFF1F2937),
+                      color: Color(0xFF1F2937),
                       fontFamily: 'Tajawal',
                     ),
                   ),
@@ -123,69 +126,77 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildSidebarContent(BuildContext context) {
+    // تحديد الصلاحيات بناءً على الـ Role الممرر
+    bool isSuperAdmin = widget.userRole == 'superadmin';
+    bool isFinance = widget.userRole == 'finance';
+    bool isLogistics = widget.userRole == 'logistics';
+    bool isMarketing = widget.userRole == 'marketing';
+
     return Container(
       color: const Color(0xFF1F2937),
       child: SingleChildScrollView(
         child: Column(
           children: [
             const SizedBox(height: 20),
-            _buildSidebarItem(Icons.add_box, "إضافة الأقسام والمنتجات", () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => ManagementPage()),
-              );
-            }),
-            _buildSidebarItem(Icons.inventory_2, "الطلبات", () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const OrdersReportPage()),
-              );
-            }),
-            _buildSidebarItem(Icons.group, "العملاء", () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const BuyersPage()),
-              );
-            }),
-            _buildSidebarItem(Icons.storefront, "البائعين", () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const SellersPage()),
-              );
-            }),
-            _buildSidebarItem(Icons.local_shipping, "إدارة الدليفري", () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const DeliveryManagementScreen()),
-              );
-            }),
-            _buildSidebarItem(Icons.settings, "الإعدادات", () {}),
-            _buildSidebarItem(Icons.assignment_ind, "الموارد البشرية", () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const HRManagementScreen()),
-              );
-            }),
-            _buildSidebarItem(Icons.add_photo_alternate, "ادارة التسويق", () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const MarketingManagementScreen()),
-              );
-            }),
-            _buildSidebarItem(Icons.warehouse, "ادارة المخازن والمشتريات", () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const InventoryHub()),
-              );
-            }),
-            // ✅ تم ربط الإدارة المالية بالصفحة الجديدة هنا
-            _buildSidebarItem(Icons.paid, "الإدارة المالية", () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const FinancialDashboard()),
-              );
-            }, color: const Color(0xFF10B981)),
-            _buildSidebarItem(Icons.security, "الاستخدام والخصوصية", () {}),
+
+            // 👑 حصري للسوبر أدمن: إدارة الفريق (المديرين)
+            if (isSuperAdmin)
+              _buildSidebarItem(Icons.admin_panel_settings, "إدارة الفريق", () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const TeamManagementScreen()));
+              }, color: Colors.orangeAccent),
+
+            // 📦 الأقسام والمنتجات (سوبر أدمن + مخازن)
+            if (isSuperAdmin || isLogistics)
+              _buildSidebarItem(Icons.add_box, "الأقسام والمنتجات", () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => ManagementPage()));
+              }),
+
+            // 📝 الطلبات (سوبر أدمن + مخازن + مالية)
+            if (isSuperAdmin || isLogistics || isFinance)
+              _buildSidebarItem(Icons.inventory_2, "الطلبات", () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const OrdersReportPage()));
+              }),
+
+            // 👥 العملاء والبائعين (سوبر أدمن + تسويق)
+            if (isSuperAdmin || isMarketing) ...[
+              _buildSidebarItem(Icons.group, "العملاء", () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const BuyersPage()));
+              }),
+              _buildSidebarItem(Icons.storefront, "البائعين", () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const SellersPage()));
+              }),
+            ],
+
+            // 🚚 الدليفري (سوبر أدمن + مخازن)
+            if (isSuperAdmin || isLogistics)
+              _buildSidebarItem(Icons.local_shipping, "إدارة الدليفري", () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const DeliveryManagementScreen()));
+              }),
+
+            // 🏢 الموارد البشرية (سوبر أدمن فقط)
+            if (isSuperAdmin)
+              _buildSidebarItem(Icons.assignment_ind, "HR", () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const HRManagementScreen()));
+              }),
+
+            // 📣 التسويق (سوبر أدمن + تسويق)
+            if (isSuperAdmin || isMarketing)
+              _buildSidebarItem(Icons.add_photo_alternate, "التسويق", () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const MarketingManagementScreen()));
+              }),
+
+            // 🏭 المخازن (سوبر أدمن + مخازن)
+            if (isSuperAdmin || isLogistics)
+              _buildSidebarItem(Icons.warehouse, "المخازن", () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const InventoryHub()));
+              }),
+
+            // 💰 المالية (سوبر أدمن + مالية)
+            if (isSuperAdmin || isFinance)
+              _buildSidebarItem(Icons.paid, "المالية", () {
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const FinancialDashboard()));
+              }, color: const Color(0xFF10B981)),
+
             const Divider(color: Colors.white24),
             _buildSidebarItem(Icons.logout, "خروج", () => _logout(context), color: Colors.redAccent),
             const SizedBox(height: 20),
@@ -227,15 +238,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            value,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
-          ),
+          Text(value, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1F2937))),
           const SizedBox(height: 10),
-          Text(
-            title,
-            style: const TextStyle(fontSize: 18, color: Color(0xFF4B5563), fontFamily: 'Tajawal'),
-          ),
+          Text(title, style: const TextStyle(fontSize: 18, color: Color(0xFF4B5563), fontFamily: 'Tajawal')),
         ],
       ),
     );
