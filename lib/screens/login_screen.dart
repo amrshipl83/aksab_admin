@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dashboard_screen.dart'; // تأكد من استيراد الداشبورد
+import 'dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -10,70 +10,88 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
   bool _isLoading = false;
   String _message = '';
 
-  Future<void> _handleLogin() async {
-    setState(() {
-      _isLoading = true;
-      _message = '';
-    });
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    // التحقق فوراً إذا كان التطبيق فُتح عن طريق رابط مرسل للإيميل
+    _checkIncomingLink();
+  }
 
+  // دالة للتحقق من الرابط عند العودة للتطبيق
+  Future<void> _checkIncomingLink() async {
+    final auth = FirebaseAuth.instance;
+    if (auth.isSignInWithEmailLink(Uri.base.toString())) {
+      setState(() => _isLoading = true);
+      try {
+        // نحتاج الإيميل لإتمام العملية (مخزن مؤقتاً أو نطلبه من المستخدم)
+        // سنحاول جلب الإيميل المحفوظ محلياً أو نطلب إعادة كتابته
+        String email = _emailController.text.trim(); 
+        
+        final userCredential = await auth.signInWithEmailLink(
+          email: email,
+          emailLink: Uri.base.toString(),
+        );
+
+        if (userCredential.user != null) {
+          _proceedToDashboard(userCredential.user!.uid);
+        }
+      } catch (e) {
+        setState(() => _message = "❌ الرابط منتهي الصلاحية أو غير صحيح.");
+      } finally {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  // إرسال الرابط للإيميل
+  Future<void> _sendMagicLink() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      setState(() => _message = "⚠️ يرجى كتابة البريد الإلكتروني أولاً");
+      return;
+    }
+
+    setState(() => _isLoading = true);
     try {
-      // 1. تسجيل الدخول الأساسي
-      UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
+      var acs = ActionCodeSettings(
+        url: 'https://aksab-admin.web.app/admin', // رابط الويب الخاص بك
+        handleCodeInApp: true,
+        androidPackageName: 'com.example.aksab_admin', // اسم الباكيج الخاص بك
+        androidInstallApp: true,
+        androidMinimumVersion: '12',
       );
 
-      User? user = userCredential.user;
+      await FirebaseAuth.instance.sendSignInLinkToEmail(
+        email: email,
+        actionCodeSettings: acs,
+      );
 
-      if (user != null) {
-        // تحديث حالة المستخدم للتأكد من آخر وضع للـ Verification
-        await user.reload();
-        user = FirebaseAuth.instance.currentUser;
-
-        // 2. التحقق من مصادقة إيميل زوهو
-        if (!user!.emailVerified) {
-          // لو مش متفعل، نبعت رابط التحقق فوراً
-          await user.sendEmailVerification();
-          setState(() {
-            _message = "⚠️ حسابك غير موثق. تم إرسال رابط تأكيد جديد إلى بريدك في Zoho. يرجى الضغط عليه ثم حاول الدخول مجدداً.";
-          });
-          await FirebaseAuth.instance.signOut(); // نخرجه لحد ما يفعل
-          return;
-        }
-
-        // 3. لو مفعل، نجيب الـ Role من Firestore
-        DocumentSnapshot adminDoc = await FirebaseFirestore.instance
-            .collection('admins')
-            .doc(user.uid)
-            .get();
-
-        if (adminDoc.exists) {
-          String role = adminDoc.get('role') ?? 'user';
-          
-          if (mounted) {
-            // الدخول للوحة وتمرير الصلاحية
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => DashboardScreen(userRole: role)),
-            );
-          }
-        } else {
-          setState(() => _message = "❌ خطأ: لم يتم العثور على صلاحيات لهذا الحساب.");
-        }
-      }
-    } on FirebaseAuthException catch (e) {
-      String errorText = "حدث خطأ في الدخول";
-      if (e.code == 'user-not-found') errorText = "المستخدم غير موجود";
-      else if (e.code == 'wrong-password') errorText = "كلمة المرور غير صحيحة";
-      setState(() => _message = "❌ $errorText");
+      setState(() => _message = "✅ تم إرسال رابط الدخول إلى $email. يرجى فحص بريد Zoho والضغط على الرابط.");
+    } catch (e) {
+      setState(() => _message = "❌ خطأ في إرسال الرابط: ${e.toString()}");
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _proceedToDashboard(String uid) async {
+    final adminDoc = await FirebaseFirestore.instance.collection('admins').doc(uid).get();
+    if (adminDoc.exists) {
+      String role = adminDoc.get('role') ?? 'user';
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => DashboardScreen(userRole: role)),
+        );
+      }
+    } else {
+      setState(() => _message = "❌ ليس لديك صلاحيات دخول.");
     }
   }
 
@@ -88,38 +106,40 @@ class _LoginScreenState extends State<LoginScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(15),
-            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20)],
+            boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 20)],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text("لوحة تحكم أكسب", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Color(0xFF1F2937))),
+              const Text("دخول الموظفين", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              const Text("سيتم إرسال كود دخول آمن لبريدك في Zoho", 
+                  textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 30),
               TextField(
                 controller: _emailController,
-                decoration: const InputDecoration(labelText: "البريد الإلكتروني (Zoho)", border: OutlineInputBorder()),
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: _passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: "كلمة المرور", border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                  labelText: "بريد Zoho الإلكتروني",
+                  prefixIcon: Icon(Icons.email_outlined),
+                  border: OutlineInputBorder(),
+                ),
               ),
               const SizedBox(height: 25),
               _isLoading
                   ? const CircularProgressIndicator()
                   : ElevatedButton(
-                      onPressed: _handleLogin,
+                      onPressed: _sendMagicLink,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF1F2937),
                         minimumSize: const Size(double.infinity, 55),
                       ),
-                      child: const Text("دخول للمنصة", style: TextStyle(color: Colors.white, fontSize: 18)),
+                      child: const Text("إرسال رابط الدخول", style: TextStyle(color: Colors.white, fontSize: 18)),
                     ),
               if (_message.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 20),
-                  child: Text(_message, textAlign: TextAlign.center, style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w500)),
+                  child: Text(_message, textAlign: TextAlign.center, 
+                      style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.w500)),
                 ),
             ],
           ),
