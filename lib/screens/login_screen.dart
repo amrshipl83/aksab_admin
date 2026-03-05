@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // نحتاج هذه المكتبة لحفظ الإيميل مؤقتاً
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -20,7 +20,6 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // التحقق فوراً إذا كان التطبيق فُتح عن طريق رابط مرسل للإيميل
     _checkIncomingLink();
   }
 
@@ -31,16 +30,13 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  // دالة للتحقق من الرابط عند العودة للتطبيق
   Future<void> _checkIncomingLink() async {
     final auth = FirebaseAuth.instance;
-    // التحقق من الرابط الحالي في المتصفح
     String link = Uri.base.toString();
 
     if (auth.isSignInWithEmailLink(link)) {
       setState(() => _isLoading = true);
       try {
-        // جلب الإيميل الذي حفظناه قبل إرسال الرابط
         final prefs = await SharedPreferences.getInstance();
         String? email = prefs.getString('user_email') ?? _emailController.text.trim();
 
@@ -56,12 +52,10 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
         );
 
         if (userCredential.user != null) {
-          // مسح الإيميل من الذاكرة بعد النجاح
           await prefs.remove('user_email');
           _proceedToDashboard(userCredential.user!.uid);
         }
       } catch (e) {
-        debugPrint("Error signing in with link: $e");
         setState(() => _message = "❌ الرابط منتهي الصلاحية أو غير صحيح.");
       } finally {
         if (mounted) setState(() => _isLoading = false);
@@ -69,7 +63,6 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
     }
   }
 
-  // إرسال الرابط للإيميل
   Future<void> _sendMagicLink() async {
     final email = _emailController.text.trim();
     if (email.isEmpty) {
@@ -79,17 +72,19 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
 
     setState(() => _isLoading = true);
     try {
-      // حفظ الإيميل محلياً لاستخدامه عند العودة من الرابط
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('user_email', email);
 
       var acs = ActionCodeSettings(
-        // ✅ تم تعديل الرابط ليطابق الدومين الخاص بك على GitHub
-        url: 'https://amrshipl83.github.io/aksab_admin/', 
+        // الرابط الذي سيعود إليه المستخدم (GitHub Pages)
+        url: 'https://amrshipl83.github.io/aksab_admin/',
         handleCodeInApp: true,
-        androidPackageName: 'com.example.aksab_admin',
+        // اسم الباكيج الخاص بتطبيق الأندرويد لفتحه تلقائياً إن وجد
+        androidPackageName: 'com.aksabeg', 
         androidInstallApp: true,
         androidMinimumVersion: '12',
+        // ✅ المفتاح السحري: استخدام دومين الهوستنج كبوابة بديلة للـ Dynamic Links
+        dynamicLinkDomain: 'aksabeg-b6571.firebaseapp.com', 
       );
 
       await FirebaseAuth.instance.sendSignInLinkToEmail(
@@ -97,24 +92,22 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
         actionCodeSettings: acs,
       );
 
-      setState(() => _message = "✅ تم إرسال رابط الدخول إلى $email.\nافتح بريد Zoho (أو الجيميل) واضغط على الرابط.");
+      setState(() => _message = "✅ تم إرسال رابط الدخول إلى $email.\nافحص بريدك الآن واضغط على الرابط.");
     } catch (e) {
       setState(() => _message = "❌ خطأ: ${e.toString()}");
-      debugPrint("Firebase Send Link Error: $e");
     } finally {
       setState(() => _isLoading = false);
     }
   }
 
   Future<void> _proceedToDashboard(String uid) async {
-    final adminDoc = await FirebaseFirestore.instance.collection('admins').doc(uid).get();
-    
-    // ملاحظة: لو الموظف جديد (Pending)، المستند قد لا يكون موجوداً بـ الـ UID 
-    // بل بالإيميل، لذا سنبحث بالاثنين
+    // محاولة جلب بيانات الأدمن بالـ UID
+    var adminDoc = await FirebaseFirestore.instance.collection('admins').doc(uid).get();
+
     if (adminDoc.exists) {
       _navigate(adminDoc.get('role') ?? 'user');
     } else {
-      // بحث إضافي بالإيميل لو كان أول دخول له
+      // لو أول مرة يدخل، نبحث عنه بالإيميل لتحديث بياناته
       final email = FirebaseAuth.instance.currentUser?.email;
       final query = await FirebaseFirestore.instance
           .collection('admins')
@@ -124,24 +117,28 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
 
       if (query.docs.isNotEmpty) {
         String role = query.docs.first.get('role') ?? 'user';
-        // تحديث الـ Document ليأخذ الـ UID الجديد بدلاً من الإيميل فقط
         await _updateAdminRecord(query.docs.first.id, uid);
         _navigate(role);
       } else {
-        setState(() => _message = "❌ ليس لديك صلاحيات دخول بالسيستم.");
+        setState(() => _message = "❌ ليس لديك صلاحيات دخول كمسؤول.");
         await FirebaseAuth.instance.signOut();
       }
     }
   }
 
   Future<void> _updateAdminRecord(String oldDocId, String uid) async {
-    // تحديث بسيط لربط الحساب بالـ UID الفعلي لفايربيز
-    await FirebaseFirestore.instance.collection('admins').doc(uid).set({
-      ... (await FirebaseFirestore.instance.collection('admins').doc(oldDocId).get()).data()!,
-      'status': 'active',
-      'last_login': FieldValue.serverTimestamp(),
-    });
-    // حذف المستند القديم (المسجل بالإيميل) لو لزم الأمر أو تركه
+    final data = (await FirebaseFirestore.instance.collection('admins').doc(oldDocId).get()).data();
+    if (data != null) {
+      await FirebaseFirestore.instance.collection('admins').doc(uid).set({
+        ...data,
+        'status': 'active',
+        'last_login': FieldValue.serverTimestamp(),
+      });
+      // اختياري: حذف المستند القديم المعرف بالإيميل فقط
+      if (oldDocId != uid) {
+        await FirebaseFirestore.instance.collection('admins').doc(oldDocId).delete();
+      }
+    }
   }
 
   void _navigate(String role) {
@@ -169,16 +166,16 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text("دخول الموظفين", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, fontFamily: 'Tajawal')),
+              const Text("دخول الإدارة", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, fontFamily: 'Tajawal')),
               const SizedBox(height: 10),
-              const Text("ادخل بريدك وسيصلك رابط دخول مباشر", 
+              const Text("سيصلك رابط تسجيل دخول آمن على بريدك",
                   textAlign: TextAlign.center, style: TextStyle(color: Colors.grey, fontFamily: 'Tajawal')),
               const SizedBox(height: 30),
               TextField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 decoration: const InputDecoration(
-                  labelText: "البريد الإلكتروني الرسمي",
+                  labelText: "البريد الإلكتروني",
                   prefixIcon: Icon(Icons.email_outlined),
                   border: OutlineInputBorder(),
                 ),
@@ -198,7 +195,7 @@ class _LoginScreenState extends State<LoginScreen> with WidgetsBindingObserver {
               if (_message.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 20),
-                  child: Text(_message, textAlign: TextAlign.center, 
+                  child: Text(_message, textAlign: TextAlign.center,
                       style: const TextStyle(color: Colors.blueAccent, fontWeight: FontWeight.bold, fontFamily: 'Tajawal')),
                 ),
             ],
