@@ -256,4 +256,3 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (context.mounted) Navigator.pushReplacementNamed(context, '/');
   }
 }
-
