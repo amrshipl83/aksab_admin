@@ -146,34 +146,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
     bool isFinance = role == 'finance';
     bool isLogistics = role == 'logistics' || role == 'inventory';
     bool isMarketing = role == 'marketing';
+    bool isHR = role == 'hr' || isSuper;
+    bool isDelivery = role == 'delivery' || isSuper || isLogistics;
 
     return Container(
       color: const Color(0xFF1F2937),
-      child: ListView( // ✅ تم التغيير لـ ListView لضمان ظهور كافة الأيقونات بالسكرول
+      child: ListView(
         padding: EdgeInsets.zero,
         children: [
           const SizedBox(height: 40),
           
-          // 1. حسابي (للجميع)
+          // 1. حسابي (لون لبني)
           _buildSidebarItem(Icons.person_outline, "حسابي", () {
-            // كود فتح صفحة تعديل البيانات
+            // سيتم ربط صفحة تعديل الحساب لاحقاً
           }, color: Colors.cyanAccent),
           
-          const Divider(color: Colors.white10, indent: 10, endIndent: 10),
+          const Divider(color: Colors.white10, indent: 15, endIndent: 15),
 
-          // 2. إدارة الفريق (سوبر أدمن فقط)
+          // 2. إدارة الفريق (برتقالي - للسوبر أدمن فقط)
           if (isSuper)
             _buildSidebarItem(Icons.admin_panel_settings, "إدارة الفريق", () {
               Navigator.push(context, MaterialPageRoute(builder: (context) => const TeamManagementScreen()));
             }, color: Colors.orangeAccent),
 
-          // 3. المالية (سوبر أدمن + مالية)
+          // 3. المالية (أخضر زاهي)
           if (isSuper || isFinance)
             _buildSidebarItem(Icons.paid, "المالية", () {
               Navigator.push(context, MaterialPageRoute(builder: (context) => const FinancialDashboard()));
-            }, color: const Color(0xFF10B981)),
+            }, color: Colors.greenAccent),
 
-          // 4. المخازن والمنتجات (سوبر أدمن + مخازن)
+          // 4. الموارد البشرية (أزرق فاتح)
+          if (isHR)
+            _buildSidebarItem(Icons.badge, "الموظفين (HR)", () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const HRManagementScreen()));
+            }, color: Colors.lightBlueAccent),
+
+          // 5. المخازن والمنتجات (أبيض)
           if (isSuper || isLogistics) ...[
             _buildSidebarItem(Icons.add_box, "إضافة منتج", () {
               Navigator.push(context, MaterialPageRoute(builder: (context) => ManagementPage()));
@@ -183,29 +191,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
             }),
           ],
 
-          // 5. الأقسام العامة (الكل يشوفها)
+          // 6. الطلبات والتجار والموردين (أبيض)
           _buildSidebarItem(Icons.inventory_2, "الطلبات", () {
             Navigator.push(context, MaterialPageRoute(builder: (context) => const OrdersReportPage()));
           }),
-          _buildSidebarItem(Icons.group, "التجار", () {
+          _buildSidebarItem(Icons.group, "تجار التجزئة", () {
             Navigator.push(context, MaterialPageRoute(builder: (context) => const BuyersPage()));
           }),
           _buildSidebarItem(Icons.storefront, "الموردين", () {
             Navigator.push(context, MaterialPageRoute(builder: (context) => const SellersPage()));
           }),
 
-          // 6. المستهلكين (متاحة للكل بلون أصفر)
+          // 7. المستهلكين (أصفر ذهبي مميز)
           _buildSidebarItem(Icons.people_alt, "المستهلكين", () {
-             // سنقوم بربط صفحة التقارير هنا
+             // سنقوم ببرمجتها الآن
           }, color: Colors.yellowAccent),
 
-          // 7. التسويق (سوبر + تسويق)
+          // 8. إدارة الدليفري (أخضر ليموني)
+          if (isDelivery)
+            _buildSidebarItem(Icons.local_shipping, "الدليفري", () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const DeliveryManagementScreen()));
+            }, color: Colors.limeAccent),
+
+          // 9. التسويق (بنفسجي فاتح)
           if (isSuper || isMarketing)
             _buildSidebarItem(Icons.campaign, "التسويق", () {
               Navigator.push(context, MaterialPageRoute(builder: (context) => const MarketingManagementScreen()));
-            }),
+            }, color: Colors.purpleAccent),
 
-          const Divider(color: Colors.white10, indent: 10, endIndent: 10),
+          const Divider(color: Colors.white10, indent: 15, endIndent: 15),
           _buildSidebarItem(Icons.logout, "خروج", () => _logout(context), color: Colors.redAccent),
           const SizedBox(height: 50),
         ],
@@ -216,13 +230,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildSidebarItem(IconData icon, String label, VoidCallback onTap, {Color color = Colors.white}) {
     return ListTile(
       onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+      contentPadding: const EdgeInsets.symmetric(vertical: 5),
       title: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color, size: 26),
+          Icon(icon, color: color, size: 24),
           const SizedBox(height: 5),
-          Text(label, textAlign: TextAlign.center, style: TextStyle(color: color, fontSize: 10, fontFamily: 'Tajawal')),
+          Text(
+            label, 
+            textAlign: TextAlign.center, 
+            style: TextStyle(color: color, fontSize: 10, fontFamily: 'Tajawal', fontWeight: FontWeight.w500)
+          ),
         ],
       ),
     );
