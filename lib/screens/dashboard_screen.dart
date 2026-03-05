@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart'; // البديل الحديث لـ dart:html
+import 'package:flutter/foundation.dart';
 
 // الربط بالصفحات
 import '../pages/management_page.dart';
 import '../pages/orders_report_page.dart';
-import '../pages/buyers_page.dart'; // تجار التجزئة
-import '../pages/sellers_page.dart'; // الموردين
+import '../pages/buyers_page.dart'; 
+import '../pages/sellers_page.dart';
 
 // استيراد الشاشات
 import '../screens/delivery_management_screen.dart';
@@ -19,7 +19,6 @@ import '../screens/team_management_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String userRole;
-
   const DashboardScreen({super.key, required this.userRole});
 
   @override
@@ -27,12 +26,11 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // متغيرات البيانات
   double _salesTotal = 0;
   int _ordersCount = 0;
-  int _sellersCount = 0; // الموردين
-  int _buyersCount = 0;  // تجار التجزئة
-  int _consumersCount = 0; // المستهلكين الجدد
+  int _sellersCount = 0;
+  int _buyersCount = 0;
+  int _consumersCount = 0;
 
   @override
   void initState() {
@@ -44,8 +42,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       final ordersSnapshot = await FirebaseFirestore.instance.collection("orders").get();
       final sellersSnapshot = await FirebaseFirestore.instance.collection("sellers").get();
-      final buyersSnapshot = await FirebaseFirestore.instance.collection("buyers").get(); // تجار التجزئة
-      final consumersSnapshot = await FirebaseFirestore.instance.collection("users").get(); // المستهلكين
+      final buyersSnapshot = await FirebaseFirestore.instance.collection("buyers").get();
+      final consumersSnapshot = await FirebaseFirestore.instance.collection("users").get();
 
       double totalSales = 0;
       for (var doc in ordersSnapshot.docs) {
@@ -71,7 +69,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // قاعدة التوافق: تحديد نوع الشاشة
     return LayoutBuilder(
       builder: (context, constraints) {
         bool isMobile = constraints.maxWidth < 800;
@@ -79,7 +76,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           backgroundColor: const Color(0xFFF2F4F8),
           appBar: isMobile
               ? AppBar(
-                  title: const Text("أكسب - الإدارة", style: TextStyle(fontFamily: 'Tajawal')),
+                  title: const Text("أكسب - الإدارة", style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
                   backgroundColor: const Color(0xFF1F2937),
                   foregroundColor: Colors.white,
                 )
@@ -117,13 +114,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          "مرحباً بك، نظام أكسب الذكي",
-          style: TextStyle(fontSize: 16, color: Colors.grey[600], fontFamily: 'Tajawal'),
-        ),
+        const Text("مرحباً بك في نظام أكسب الذكي", style: TextStyle(fontSize: 14, color: Colors.grey, fontFamily: 'Tajawal')),
         Text(
           "لوحة التحكم (${widget.userRole})",
-          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1F2937), fontFamily: 'Tajawal'),
+          style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF1F2937), fontFamily: 'Tajawal'),
         ),
       ],
     );
@@ -139,7 +133,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       childAspectRatio: isMobile ? 2.8 : 1.6,
       children: [
         _buildStatusCard("${_salesTotal.toStringAsFixed(0)} ج.م", "المبيعات", Icons.account_balance_wallet, Colors.blue),
-        _buildStatusCard("$_ordersCount", "الطلبات الحالية", Icons.shopping_cart, Colors.orange),
+        _buildStatusCard("$_ordersCount", "الطلبات", Icons.shopping_cart, Colors.orange),
         _buildStatusCard("$_sellersCount", "الموردين", Icons.store, Colors.purple),
         _buildStatusCard("$_consumersCount", "المستهلكين", Icons.person_pin, Colors.teal),
       ],
@@ -150,76 +144,84 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final role = widget.userRole.toLowerCase();
     bool isSuper = role == 'superadmin';
     bool isFinance = role == 'finance';
-    bool isLogistics = role == 'logistics' || role == 'inventory'; // المخازن
+    bool isLogistics = role == 'logistics' || role == 'inventory';
     bool isMarketing = role == 'marketing';
 
-    return Column(
-      children: [
-        const SizedBox(height: 30),
-        // 1. حسابي (للجميع)
-        _buildSidebarItem(Icons.person_outline, "حسابي", () {}, color: Colors.cyanAccent),
-        const Divider(color: Colors.white10),
+    return Container(
+      color: const Color(0xFF1F2937),
+      child: ListView( // ✅ تم التغيير لـ ListView لضمان ظهور كافة الأيقونات بالسكرول
+        padding: EdgeInsets.zero,
+        children: [
+          const SizedBox(height: 40),
+          
+          // 1. حسابي (للجميع)
+          _buildSidebarItem(Icons.person_outline, "حسابي", () {
+            // كود فتح صفحة تعديل البيانات
+          }, color: Colors.cyanAccent),
+          
+          const Divider(color: Colors.white10, indent: 10, endIndent: 10),
 
-        // 2. إدارة الفريق (سوبر أدمن فقط)
-        if (isSuper)
-          _buildSidebarItem(Icons.admin_panel_settings, "إدارة الفريق", () {
-            Navigator.push(context, MaterialPageRoute(builder: (context) => const TeamManagementScreen()));
-          }, color: Colors.orangeAccent),
+          // 2. إدارة الفريق (سوبر أدمن فقط)
+          if (isSuper)
+            _buildSidebarItem(Icons.admin_panel_settings, "إدارة الفريق", () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const TeamManagementScreen()));
+            }, color: Colors.orangeAccent),
 
-        // 3. المالية (سوبر أدمن + مالية فقط)
-        if (isSuper || isFinance)
-          _buildSidebarItem(Icons.paid, "المالية", () {
-            Navigator.push(context, MaterialPageRoute(builder: (context) => const FinancialDashboard()));
-          }, color: const Color(0xFF10B981)),
+          // 3. المالية (سوبر أدمن + مالية)
+          if (isSuper || isFinance)
+            _buildSidebarItem(Icons.paid, "المالية", () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const FinancialDashboard()));
+            }, color: const Color(0xFF10B981)),
 
-        // 4. الأقسام والمنتجات + المخازن (سوبر أدمن + مخازن فقط)
-        if (isSuper || isLogistics) ...[
-          _buildSidebarItem(Icons.add_box, "إضافة منتج", () {
-            Navigator.push(context, MaterialPageRoute(builder: (context) => ManagementPage()));
+          // 4. المخازن والمنتجات (سوبر أدمن + مخازن)
+          if (isSuper || isLogistics) ...[
+            _buildSidebarItem(Icons.add_box, "إضافة منتج", () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => ManagementPage()));
+            }),
+            _buildSidebarItem(Icons.warehouse, "المخازن", () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const InventoryHub()));
+            }),
+          ],
+
+          // 5. الأقسام العامة (الكل يشوفها)
+          _buildSidebarItem(Icons.inventory_2, "الطلبات", () {
+            Navigator.push(context, MaterialPageRoute(builder: (context) => const OrdersReportPage()));
           }),
-          _buildSidebarItem(Icons.warehouse, "المخازن", () {
-            Navigator.push(context, MaterialPageRoute(builder: (context) => const InventoryHub()));
+          _buildSidebarItem(Icons.group, "التجار", () {
+            Navigator.push(context, MaterialPageRoute(builder: (context) => const BuyersPage()));
           }),
+          _buildSidebarItem(Icons.storefront, "الموردين", () {
+            Navigator.push(context, MaterialPageRoute(builder: (context) => const SellersPage()));
+          }),
+
+          // 6. المستهلكين (متاحة للكل بلون أصفر)
+          _buildSidebarItem(Icons.people_alt, "المستهلكين", () {
+             // سنقوم بربط صفحة التقارير هنا
+          }, color: Colors.yellowAccent),
+
+          // 7. التسويق (سوبر + تسويق)
+          if (isSuper || isMarketing)
+            _buildSidebarItem(Icons.campaign, "التسويق", () {
+              Navigator.push(context, MaterialPageRoute(builder: (context) => const MarketingManagementScreen()));
+            }),
+
+          const Divider(color: Colors.white10, indent: 10, endIndent: 10),
+          _buildSidebarItem(Icons.logout, "خروج", () => _logout(context), color: Colors.redAccent),
+          const SizedBox(height: 50),
         ],
-
-        // 5. الأقسام المتاحة للكل (ما عدا شروطك الخاصة)
-        _buildSidebarItem(Icons.inventory_2, "الطلبات", () {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => const OrdersReportPage()));
-        }),
-        
-        _buildSidebarItem(Icons.group, "تجار التجزئة", () {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => const BuyersPage()));
-        }),
-
-        _buildSidebarItem(Icons.storefront, "الموردين", () {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => const SellersPage()));
-        }),
-
-        // 6. المستهلكين (الكل يشوفها)
-        _buildSidebarItem(Icons.people_alt, "المستهلكين", () {
-          // هنا ستوجه لصفحة المستهلكين الجديدة لاحقاً
-        }, color: Colors.yellowAccent),
-
-        // 7. التسويق (سوبر + تسويق)
-        if (isSuper || isMarketing)
-          _buildSidebarItem(Icons.campaign, "التسويق", () {
-            Navigator.push(context, MaterialPageRoute(builder: (context) => const MarketingManagementScreen()));
-          }),
-
-        const Spacer(),
-        _buildSidebarItem(Icons.logout, "خروج", () => _logout(context), color: Colors.redAccent),
-        const SizedBox(height: 20),
-      ],
+      ),
     );
   }
 
   Widget _buildSidebarItem(IconData icon, String label, VoidCallback onTap, {Color color = Colors.white}) {
     return ListTile(
       onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(vertical: 8),
       title: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(height: 4),
+          Icon(icon, color: color, size: 26),
+          const SizedBox(height: 5),
           Text(label, textAlign: TextAlign.center, style: TextStyle(color: color, fontSize: 10, fontFamily: 'Tajawal')),
         ],
       ),
@@ -228,23 +230,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildStatusCard(String value, String title, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
       ),
       child: Row(
         children: [
-          CircleAvatar(backgroundColor: color.withOpacity(0.1), child: Icon(icon, color: color)),
-          const SizedBox(width: 15),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-              Text(title, style: const TextStyle(color: Colors.grey, fontFamily: 'Tajawal')),
-            ],
+          CircleAvatar(backgroundColor: color.withOpacity(0.1), child: Icon(icon, color: color, size: 20)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, overflow: TextOverflow.ellipsis)),
+                Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12, fontFamily: 'Tajawal')),
+              ],
+            ),
           ),
         ],
       ),
@@ -256,3 +260,4 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (context.mounted) Navigator.pushReplacementNamed(context, '/');
   }
 }
+
