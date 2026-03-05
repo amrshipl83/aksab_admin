@@ -1,20 +1,31 @@
 name: Deploy to GitHub Pages
+
 on:
   push:
     branches: [ main ]
+
+# ✅ إضافة صلاحيات الكتابة (مهمة جداً للأكشن الجديد)
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4 # تحديث للإصدار 4
+
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          cache: true # تفعيل الكاش لتسريع الـ Build
+
       - run: flutter pub get
-      - run: flutter build web --release --base-href "/aksab_admin/"
+
+      # ✅ إضافة --no-wasm-dry-run لتخطي تحذيرات الـ Wasm اللي شفناها قبل كدة
+      - run: flutter build web --release --base-href "/aksab_admin/" --no-wasm-dry-run
+
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./build/web
-
