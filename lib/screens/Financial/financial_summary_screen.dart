@@ -35,28 +35,25 @@ class _FinancialSummaryScreenState extends State<FinancialSummaryScreen> {
           const SizedBox(width: 10),
         ],
       ),
-      body: FutureBuilder<Map<String, dynamic>>(
-        future: _fetchFinancialData(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: Color(0xFFB21F2D)));
-          }
-          if (snapshot.hasError) {
-            return Center(child: Text("حدث خطأ في تحميل البيانات: ${snapshot.error}"));
-          }
-
-          final data = snapshot.data!;
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "📊 نظرة عامة على العمولات والديون",
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
-                ),
-                const SizedBox(height: 20),
-                GridView.count(
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // --- القسم الأول: عمولات التجار والكاش باك (تحديث يدوي أو عند الفتح) ---
+            const Text(
+              "📊 نظرة عامة على العمولات والديون (التجار)",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'Cairo'),
+            ),
+            const SizedBox(height: 20),
+            FutureBuilder<Map<String, dynamic>>(
+              future: _fetchMerchantFinancialData(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator(color: Color(0xFFB21F2D)));
+                }
+                final data = snapshot.data!;
+                return GridView.count(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   crossAxisCount: MediaQuery.of(context).size.width > 900 ? 3 : 1,
@@ -71,11 +68,52 @@ class _FinancialSummaryScreenState extends State<FinancialSummaryScreen> {
                     _buildFinanceCard("إيرادات الرسوم الشهرية", data['monthlyFees'], Icons.calendar_today, Colors.teal),
                     _buildFinanceCard("فواتير قيد الانتظار", data['pendingInvoices'].toDouble(), Icons.receipt_long, Colors.blueGrey, isCurrency: false),
                   ],
-                ),
-              ],
+                );
+              },
             ),
-          );
-        },
+
+            const SizedBox(height: 40),
+            const Divider(thickness: 2),
+            const SizedBox(height: 20),
+
+            // --- القسم الثاني: حصالة التوصيل (تحديث لحظي لايف) ---
+            const Text(
+              "🚚 إيرادات وحصالة التوصيل (الشهر الحالي)",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'Cairo', color: Color(0xFFB21F2D)),
+            ),
+            const SizedBox(height: 10),
+            const Text("هذه البيانات تتحدث تلقائياً مع كل طلب يتم تسليمه", style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 20),
+            
+            StreamBuilder<DocumentSnapshot>(
+              stream: _db.collection('platform_stats').doc('delivery_monthly_accumulator').snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) return Text("Error: ${snapshot.error}");
+                if (!snapshot.hasData || !snapshot.data!.exists) {
+                  return const Center(child: Text("لا توجد بيانات للحصالة حالياً"));
+                }
+                
+                final delData = snapshot.data!.data() as Map<String, dynamic>;
+                
+                return GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: MediaQuery.of(context).size.width > 900 ? 3 : 1,
+                  crossAxisSpacing: 15,
+                  mainAxisSpacing: 15,
+                  childAspectRatio: 2.5,
+                  children: [
+                    _buildFinanceCard("عمولات توصيل (كاش)", (delData['walletRevenue'] ?? 0).toDouble(), Icons.account_balance_wallet_outlined, Colors.deepPurple),
+                    _buildFinanceCard("عمولات توصيل (آجل)", (delData['creditRevenue'] ?? 0).toDouble(), Icons.timer_outlined, Colors.indigo),
+                    _buildFinanceCard("إجمالي دخل الطيارين", (delData['totalDriversEarnings'] ?? 0).toDouble(), Icons.moped, Colors.orange[800]!),
+                    _buildFinanceCard("حجم مبيعات البضاعة", (delData['totalVolume'] ?? 0).toDouble(), Icons.shopping_basket_outlined, Colors.blueAccent),
+                    _buildFinanceCard("عدد طلبات الشهر", (delData['totalOrders'] ?? 0).toDouble(), Icons.local_shipping_outlined, Colors.brown, isCurrency: false),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -96,7 +134,7 @@ class _FinancialSummaryScreenState extends State<FinancialSummaryScreen> {
     );
   }
 
-  Future<Map<String, dynamic>> _fetchFinancialData() async {
+  Future<Map<String, dynamic>> _fetchMerchantFinancialData() async {
     double totalRealized = 0;
     double totalUnrealized = 0;
     double totalCbDebt = 0;
@@ -157,6 +195,8 @@ class _FinancialSummaryScreenState extends State<FinancialSummaryScreen> {
   }
 }
 
+// --- بقية كود VehicleSettingsPanel و VehicleConfigCard كما هو بدون تغيير ---
+
 class VehicleSettingsPanel extends StatelessWidget {
   const VehicleSettingsPanel({super.key});
 
@@ -204,7 +244,7 @@ class _VehicleConfigCardState extends State<VehicleConfigCard> {
     'minFare': TextEditingController(),
     'serviceFee': TextEditingController(),
     'serviceFeePercentage': TextEditingController(),
-    'cancelPenaltyPoints': TextEditingController(), // 🔥 الحقل الجديد
+    'cancelPenaltyPoints': TextEditingController(),
   };
 
   bool _isLoaded = false;
@@ -220,7 +260,6 @@ class _VehicleConfigCardState extends State<VehicleConfigCard> {
     if (doc.exists) {
       var data = doc.data()!;
       _controllers.forEach((key, controller) {
-        // نضمن وضع 0 إذا لم يكن الحقل موجوداً في Firestore
         controller.text = (data[key] ?? '0').toString();
       });
     } else {
@@ -281,7 +320,6 @@ class _VehicleConfigCardState extends State<VehicleConfigCard> {
                 _buildInput("أقل رحلة", _controllers['minFare']!),
                 _buildInput("عمولة ثابتة", _controllers['serviceFee']!),
                 _buildInput("نسبة %", _controllers['serviceFeePercentage']!),
-                // 🔥 الحقل الجديد في الواجهة
                 _buildInput("غرامة إلغاء (نقطة)", _controllers['cancelPenaltyPoints']!, isPenalty: true),
               ],
             ),
@@ -303,22 +341,19 @@ class _VehicleConfigCardState extends State<VehicleConfigCard> {
 
   Widget _buildInput(String label, TextEditingController controller, {bool isPenalty = false}) {
     return SizedBox(
-      width: 155, // زدت العرض قليلاً ليناسب النص
+      width: 155,
       child: TextField(
         controller: controller,
         keyboardType: TextInputType.number,
         decoration: InputDecoration(
           labelText: label,
           labelStyle: TextStyle(
-            fontSize: 12, 
-            fontFamily: 'Cairo', 
-            color: isPenalty ? Colors.red[900] : Colors.black54,
-            fontWeight: isPenalty ? FontWeight.bold : FontWeight.normal
-          ),
+              fontSize: 12,
+              fontFamily: 'Cairo',
+              color: isPenalty ? Colors.red[900] : Colors.black54,
+              fontWeight: isPenalty ? FontWeight.bold : FontWeight.normal),
           border: const OutlineInputBorder(),
-          focusedBorder: OutlineInputBorder(
-            borderSide: BorderSide(color: isPenalty ? Colors.red : Colors.blue, width: 2)
-          ),
+          focusedBorder: OutlineInputBorder(borderSide: BorderSide(color: isPenalty ? Colors.red : Colors.blue, width: 2)),
           contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
           prefixIcon: isPenalty ? const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 18) : null,
           filled: isPenalty,
