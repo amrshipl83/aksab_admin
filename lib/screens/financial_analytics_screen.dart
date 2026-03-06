@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'monthly_finance_details.dart'; // الصفحة التي ستعرض التفاصيل
+import 'monthly_finance_details.dart'; // تأكد إن الملف ده موجود بنفس الاسم
 
 class FinancialAnalyticsScreen extends StatelessWidget {
   const FinancialAnalyticsScreen({super.key});
@@ -11,10 +11,9 @@ class FinancialAnalyticsScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text("الأرشيف المالي", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
         centerTitle: true,
-        backgroundColor: const Color(0xFFB21F2D), // لون الهوية الخاصة بك
+        backgroundColor: const Color(0xFFB21F2D),
       ),
       body: StreamBuilder<QuerySnapshot>(
-        // نجلب المستندات مرتبة حسب التاريخ الأحدث أولاً
         stream: FirebaseFirestore.instance
             .collection('platform_ledger')
             .orderBy('createdAt', descending: true)
@@ -31,7 +30,6 @@ class FinancialAnalyticsScreen extends StatelessWidget {
             );
           }
 
-          // استخراج الشهور الفريدة (Unique Periods) لمنع التكرار في القائمة
           final periods = snapshot.data!.docs
               .map((doc) => (doc.data() as Map<String, dynamic>)['period'] as String)
               .toSet()
@@ -43,7 +41,8 @@ class FinancialAnalyticsScreen extends StatelessWidget {
             itemBuilder: (context, index) {
               return Card(
                 elevation: 4,
-                margin: const EdgeInsets.bottom(15),
+                // السطر المصحح هنا: استخدمنا .only بدل .bottom
+                margin: const EdgeInsets.only(bottom: 15), 
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
                 child: ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -59,7 +58,6 @@ class FinancialAnalyticsScreen extends StatelessWidget {
                     style: TextStyle(fontFamily: 'Cairo', color: Colors.grey)),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 18, color: Colors.grey),
                   onTap: () {
-                    // الانتقال لصفحة التفاصيل وتمرير الفترة المختارة
                     Navigator.push(
                       context,
                       MaterialPageRoute(
