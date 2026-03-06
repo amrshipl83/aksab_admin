@@ -1,4 +1,5 @@
-import 'dart:io';
+import 'dart:io' show File; // استخدام مقيد لتجنب مشاكل الويب
+import 'package:flutter/foundation.dart' show kIsWeb; 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -17,10 +18,9 @@ class _ConsumersPageState extends State<ConsumersPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchText = "";
 
-  // 1. وظيفة تصدير البيانات للاكسيل
+  // 1. وظيفة تصدير البيانات للاكسيل (تدعم ويب وموبايل)
   Future<void> _exportToExcel() async {
     try {
-      // إظهار مؤشر تحميل
       showDialog(
         context: context,
         barrierDismissible: false,
@@ -42,7 +42,7 @@ class _ConsumersPageState extends State<ConsumersPage> {
         TextCellValue("تاريخ الانضمام"),
       ]);
 
-      // إضافة البيانات
+      // تعبئة البيانات
       for (var doc in query.docs) {
         var data = doc.data();
         sheetObject.appendRow([
@@ -58,16 +58,21 @@ class _ConsumersPageState extends State<ConsumersPage> {
         ]);
       }
 
-      // حفظ ومشاركة
       var fileBytes = excel.save();
-      final directory = await getTemporaryDirectory();
-      final file = File('${directory.path}/Aksab_Consumers.xlsx')
-        ..createSync(recursive: true)
-        ..writeAsBytesSync(fileBytes!);
+      
+      if (mounted) Navigator.pop(context); // إخفاء لودينج
 
-      if (mounted) Navigator.pop(context); // إخفاء التحميل
-
-      await Share.shareXFiles([XFile(file.path)], text: 'تقرير المستهلكين - تطبيق أكسب');
+      if (kIsWeb) {
+        // للويب: تحميل مباشر من المتصفح
+        excel.downloadExcel(fileName: "Aksab_Consumers.xlsx");
+      } else {
+        // للموبايل: حفظ ثم مشاركة
+        final directory = await getTemporaryDirectory();
+        final filePath = '${directory.path}/Aksab_Consumers.xlsx';
+        final file = File(filePath);
+        await file.writeAsBytes(fileBytes!);
+        await Share.shareXFiles([XFile(filePath)], text: 'تقرير المستهلكين');
+      }
 
     } catch (e) {
       if (mounted) Navigator.pop(context);
@@ -75,18 +80,19 @@ class _ConsumersPageState extends State<ConsumersPage> {
     }
   }
 
-  // 2. وظيفة الحذف الآمن (طلب جوجل بلاي)
+  // 2. وظيفة الحذف الآمن
   Future<void> _handleDelete(String docId, String name) async {
     bool confirm = await showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         title: const Text("تأكيد الحذف", textAlign: TextAlign.right),
-        content: Text("هل أنت متأكد من حذف بيانات المستهلك ($name) نهائياً؟", textAlign: TextAlign.right),
+        content: Text("هل أنت متأكد من حذف ($name)؟", textAlign: TextAlign.right),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("إلغاء")),
           TextButton(
             onPressed: () => Navigator.pop(context, true), 
-            child: const Text("حذف الآن", style: TextStyle(color: Colors.red))
+            child: const Text("حذف", style: TextStyle(color: Colors.red))
           ),
         ],
       ),
@@ -95,7 +101,7 @@ class _ConsumersPageState extends State<ConsumersPage> {
     if (confirm) {
       await FirebaseFirestore.instance.collection('consumers').doc(docId).delete();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم حذف البيانات بنجاح")));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم الحذف بنجاح")));
       }
     }
   }
@@ -105,12 +111,13 @@ class _ConsumersPageState extends State<ConsumersPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF2F4F8),
       appBar: AppBar(
-        title: const Text("قاعدة بيانات المستهلكين", style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
+        title: const Text("بيانات المستهلكين", 
+          style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF1F2937),
         foregroundColor: Colors.white,
         actions: [
           IconButton(
-            icon: const Icon(Icons.file_download_outlined),
+            icon: const Icon(Icons.file_download_outlined), 
             onPressed: _exportToExcel,
             tooltip: "تصدير Excel",
           ),
@@ -128,7 +135,7 @@ class _ConsumersPageState extends State<ConsumersPage> {
   Widget _buildSearchBar() {
     return Container(
       padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)]),
+      color: Colors.white,
       child: TextField(
         controller: _searchController,
         onChanged: (v) => setState(() => _searchText = v),
@@ -148,9 +155,10 @@ class _ConsumersPageState extends State<ConsumersPage> {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('consumers').snapshots(),
       builder: (context, snapshot) {
+        if (snapshot.hasError) return const Center(child: Text("حدث خطأ"));
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         
-        var filteredDocs = snapshot.data!.docs.where((doc) {
+        var docs = snapshot.data!.docs.where((doc) {
           var data = doc.data() as Map<String, dynamic>;
           String name = (data['fullname'] ?? "").toString().toLowerCase();
           String phone = (data['phone'] ?? "").toString();
@@ -159,8 +167,8 @@ class _ConsumersPageState extends State<ConsumersPage> {
 
         return ListView.builder(
           padding: const EdgeInsets.all(12),
-          itemCount: filteredDocs.length,
-          itemBuilder: (context, index) => _buildConsumerCard(filteredDocs[index]),
+          itemCount: docs.length,
+          itemBuilder: (context, index) => _buildConsumerCard(docs[index]),
         );
       },
     );
@@ -174,8 +182,8 @@ class _ConsumersPageState extends State<ConsumersPage> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
-        contentPadding: const EdgeInsets.all(10),
-        onTap: () => _showDetailsDialog(data),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
+        onTap: () => _showDetailsDialog(data), 
         leading: IconButton(
           icon: const Icon(Icons.delete_sweep_outlined, color: Colors.redAccent),
           onPressed: () => _handleDelete(doc.id, name),
@@ -190,8 +198,59 @@ class _ConsumersPageState extends State<ConsumersPage> {
     );
   }
 
-  // --- الديالوج بتاع التفاصيل (تكملة الكود) ---
   void _showDetailsDialog(Map<String, dynamic> data) {
-    // كود الديالوج اللي عملناه سابقاً
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        contentPadding: EdgeInsets.zero,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1F2937),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Center(
+                child: Text(data['fullname'] ?? "التفاصيل", 
+                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  _detailRow(Icons.phone, "رقم الهاتف", data['phone']),
+                  _detailRow(Icons.email, "البريد", data['email']),
+                  _detailRow(Icons.location_on, "العنوان", data['address']),
+                  _detailRow(Icons.star, "نقاط الولاء", data['loyaltyPoints']),
+                  _detailRow(Icons.account_balance_wallet, "كاش باك", data['cashbackBalance']),
+                ],
+              ),
+            ),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("إغلاق")),
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(IconData icon, String title, dynamic value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Expanded(child: Text(value?.toString() ?? "لا يوجد", textAlign: TextAlign.right)),
+          const SizedBox(width: 10),
+          Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+          const SizedBox(width: 10),
+          Icon(icon, size: 18, color: const Color(0xFF1F2937)),
+        ],
+      ),
+    );
   }
 }
