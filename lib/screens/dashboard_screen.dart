@@ -8,6 +8,8 @@ import '../pages/management_page.dart';
 import '../pages/orders_report_page.dart';
 import '../pages/buyers_page.dart'; 
 import '../pages/sellers_page.dart';
+import '../pages/consumers_page.dart'; // تأكد من المسار الصحيح حسب مكان حفظ الملف
+
 
 // استيراد الشاشات
 import '../screens/delivery_management_screen.dart';
