@@ -1,11 +1,12 @@
-import 'dart:io' show File; // استخدام مقيد لتجنب مشاكل الويب
+import 'dart:io' show File;
+import 'dart:convert'; // ضروري لتحويل البيانات للويب
 import 'package:flutter/foundation.dart' show kIsWeb; 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
 import 'package:excel/excel.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart'; // استخدمناها كبديل آمن للويب
 
 class ConsumersPage extends StatefulWidget {
   const ConsumersPage({super.key});
@@ -18,7 +19,7 @@ class _ConsumersPageState extends State<ConsumersPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchText = "";
 
-  // 1. وظيفة تصدير البيانات للاكسيل (تدعم ويب وموبايل)
+  // 1. وظيفة تصدير البيانات للاكسيل (حل متوافق مع GitHub Actions)
   Future<void> _exportToExcel() async {
     try {
       showDialog(
@@ -31,7 +32,6 @@ class _ConsumersPageState extends State<ConsumersPage> {
       var excel = Excel.createExcel();
       Sheet sheetObject = excel['Sheet1'];
 
-      // العناوين
       sheetObject.appendRow([
         TextCellValue("الاسم"),
         TextCellValue("الهاتف"),
@@ -42,7 +42,6 @@ class _ConsumersPageState extends State<ConsumersPage> {
         TextCellValue("تاريخ الانضمام"),
       ]);
 
-      // تعبئة البيانات
       for (var doc in query.docs) {
         var data = doc.data();
         sheetObject.appendRow([
@@ -63,10 +62,18 @@ class _ConsumersPageState extends State<ConsumersPage> {
       if (mounted) Navigator.pop(context); // إخفاء لودينج
 
       if (kIsWeb) {
-        // للويب: تحميل مباشر من المتصفح
-        excel.downloadExcel(fileName: "Aksab_Consumers.xlsx");
+        // حل الويب: تحويل الملف إلى Base64 وفتحه كرابط تحميل
+        final base64Content = base64Encode(fileBytes!);
+        final url = 'data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,$base64Content';
+        final uri = Uri.parse(url);
+        
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri);
+        } else {
+          throw 'تعذر تحميل الملف على المتصفح';
+        }
       } else {
-        // للموبايل: حفظ ثم مشاركة
+        // حل الموبايل: حفظ في الذاكرة المؤقتة ثم مشاركة
         final directory = await getTemporaryDirectory();
         final filePath = '${directory.path}/Aksab_Consumers.xlsx';
         final file = File(filePath);
@@ -76,7 +83,7 @@ class _ConsumersPageState extends State<ConsumersPage> {
 
     } catch (e) {
       if (mounted) Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ في التصدير: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ: $e")));
     }
   }
 
@@ -90,19 +97,15 @@ class _ConsumersPageState extends State<ConsumersPage> {
         content: Text("هل أنت متأكد من حذف ($name)؟", textAlign: TextAlign.right),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("إلغاء")),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true), 
-            child: const Text("حذف", style: TextStyle(color: Colors.red))
-          ),
+          TextButton(onPressed: () => Navigator.pop(context, true), 
+            child: const Text("حذف", style: TextStyle(color: Colors.red))),
         ],
       ),
     ) ?? false;
 
     if (confirm) {
       await FirebaseFirestore.instance.collection('consumers').doc(docId).delete();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم الحذف بنجاح")));
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم الحذف")));
     }
   }
 
@@ -111,16 +114,11 @@ class _ConsumersPageState extends State<ConsumersPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF2F4F8),
       appBar: AppBar(
-        title: const Text("بيانات المستهلكين", 
-          style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
+        title: const Text("المستهلكين", style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
         backgroundColor: const Color(0xFF1F2937),
         foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.file_download_outlined), 
-            onPressed: _exportToExcel,
-            tooltip: "تصدير Excel",
-          ),
+          IconButton(icon: const Icon(Icons.file_download_outlined), onPressed: _exportToExcel),
         ],
       ),
       body: Column(
@@ -155,9 +153,7 @@ class _ConsumersPageState extends State<ConsumersPage> {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('consumers').snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.hasError) return const Center(child: Text("حدث خطأ"));
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-        
         var docs = snapshot.data!.docs.where((doc) {
           var data = doc.data() as Map<String, dynamic>;
           String name = (data['fullname'] ?? "").toString().toLowerCase();
@@ -177,23 +173,18 @@ class _ConsumersPageState extends State<ConsumersPage> {
   Widget _buildConsumerCard(DocumentSnapshot doc) {
     var data = doc.data() as Map<String, dynamic>;
     String name = data['fullname'] ?? "بدون اسم";
-
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
-        onTap: () => _showDetailsDialog(data), 
+        onTap: () => _showDetailsDialog(data),
         leading: IconButton(
           icon: const Icon(Icons.delete_sweep_outlined, color: Colors.redAccent),
           onPressed: () => _handleDelete(doc.id, name),
         ),
         title: Text(name, textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text(data['phone'] ?? "", textAlign: TextAlign.right),
-        trailing: CircleAvatar(
-          backgroundColor: Colors.blueGrey[50],
-          child: Text(name.isNotEmpty ? name[0] : "?"),
-        ),
+        trailing: CircleAvatar(child: Text(name.isNotEmpty ? name[0] : "?")),
       ),
     );
   }
@@ -208,30 +199,23 @@ class _ConsumersPageState extends State<ConsumersPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
+              width: double.infinity,
               padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(
-                color: Color(0xFF1F2937),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-              child: Center(
-                child: Text(data['fullname'] ?? "التفاصيل", 
-                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-              ),
+              decoration: const BoxDecoration(color: Color(0xFF1F2937), borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+              child: Center(child: Text(data['fullname'] ?? "التفاصيل", style: const TextStyle(color: Colors.white, fontSize: 18))),
             ),
             Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
-                  _detailRow(Icons.phone, "رقم الهاتف", data['phone']),
+                  _detailRow(Icons.phone, "الهاتف", data['phone']),
                   _detailRow(Icons.email, "البريد", data['email']),
                   _detailRow(Icons.location_on, "العنوان", data['address']),
-                  _detailRow(Icons.star, "نقاط الولاء", data['loyaltyPoints']),
-                  _detailRow(Icons.account_balance_wallet, "كاش باك", data['cashbackBalance']),
+                  _detailRow(Icons.star, "النقاط", data['loyaltyPoints']),
                 ],
               ),
             ),
             TextButton(onPressed: () => Navigator.pop(context), child: const Text("إغلاق")),
-            const SizedBox(height: 10),
           ],
         ),
       ),
@@ -248,7 +232,7 @@ class _ConsumersPageState extends State<ConsumersPage> {
           const SizedBox(width: 10),
           Text(title, style: const TextStyle(color: Colors.grey, fontSize: 12)),
           const SizedBox(width: 10),
-          Icon(icon, size: 18, color: const Color(0xFF1F2937)),
+          Icon(icon, size: 18),
         ],
       ),
     );
