@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'Financial/financial_summary_screen.dart'; // ✅ مسار صفحة الإيرادات
 import 'Financial/invoices_management_screen.dart'; // ✅ مسار صفحة الفواتير
 import 'subscriptions_screen.dart'; // ✅ إضافة استيراد صفحة الاشتراكات الجديدة
+import 'financial_analytics_screen.dart'; 
+
 
 class FinancialDashboard extends StatelessWidget {
   const FinancialDashboard({super.key});
@@ -112,7 +114,18 @@ class FinancialDashboard extends StatelessWidget {
 
                 // 4. بقية الكروت (للتطوير لاحقاً)
                 _buildMenuCard(context, "الحركة المالية", Icons.analytics, const Color(0xFF388E3C)),
-                _buildMenuCard(context, "الأرباح والخسائر", Icons.trending_up, const Color(0xFF7B1FA2)),
+                // 5. كرت الأرباح والخسائر (تم الربط الآن)
+_buildMenuCard(
+  context, 
+  "الأرباح والخسائر", 
+  Icons.trending_up, 
+  const Color(0xFF7B1FA2),
+  onTap: () => Navigator.push(
+    context, 
+    MaterialPageRoute(builder: (context) => const FinancialAnalyticsScreen())
+  ),
+),
+
                 _buildMenuCard(context, "التقارير الضريبية", Icons.description, Colors.redAccent),
               ],
             ),
