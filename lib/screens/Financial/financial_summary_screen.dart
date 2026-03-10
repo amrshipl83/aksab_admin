@@ -25,7 +25,8 @@ class _FinancialSummaryScreenState extends State<FinancialSummaryScreen> {
   Future<double> _fetchUnearnedSubscriptions() async {
     double totalUnearned = 0;
     final snapshot = await _db.collection('active_subscriptions')
-        .where('status', '==', 'active')
+        .where('status', isEqualTo: 'active') // ✅ ده التنسيق الصحيح والحديث
+
         .get();
 
     for (var doc in snapshot.docs) {
