@@ -1,12 +1,10 @@
-
 import 'package:flutter/material.dart';
 import 'Financial/financial_summary_screen.dart'; // ✅ مسار صفحة الإيرادات
 import 'Financial/invoices_management_screen.dart'; // ✅ مسار صفحة الفواتير
 import 'subscriptions_screen.dart'; // ✅ إضافة استيراد صفحة الاشتراكات الجديدة
 import 'financial_analytics_screen.dart';
 import 'revenue_screen.dart'; // ✅ شاشة حركة الدفع الإلكتروني
-
-
+import 'GeneralExpense/general_expenses_screen.dart'; // ✅ استيراد صفحة المصروفات العامة الجديدة
 
 class FinancialDashboard extends StatelessWidget {
   const FinancialDashboard({super.key});
@@ -50,11 +48,11 @@ class FinancialDashboard extends StatelessWidget {
                   BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4))
                 ],
               ),
-              child: Column(
+              child: const Column(
                 children: [
-                  const Icon(Icons.account_balance_wallet, size: 60, color: Color(0xFFB21F2D)),
-                  const SizedBox(height: 15),
-                  const Text(
+                  Icon(Icons.account_balance_wallet, size: 60, color: Color(0xFFB21F2D)),
+                  SizedBox(height: 15),
+                  Text(
                     "لوحة التحكم المالية والمحاسبية",
                     style: TextStyle(
                         fontFamily: 'Cairo',
@@ -62,11 +60,11 @@ class FinancialDashboard extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF1F2937)),
                   ),
-                  const SizedBox(height: 5),
+                  SizedBox(height: 5),
                   Text(
                     "قم بإدارة كافة العمليات المالية والتقارير المحاسبية من مكان واحد",
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontFamily: 'Cairo', color: Colors.grey[600], fontSize: 14),
+                    style: TextStyle(fontFamily: 'Cairo', color: Colors.grey, fontSize: 14),
                   ),
                 ],
               ),
@@ -93,10 +91,10 @@ class FinancialDashboard extends StatelessWidget {
                       MaterialPageRoute(builder: (context) => const FinancialSummaryScreen())),
                 ),
 
-                // 2. كرت الفواتير
+                // 2. كرت فواتير الموردين (تم تعديل المسمى)
                 _buildMenuCard(
                   context,
-                  "فواتير",
+                  "فواتير الموردين",
                   Icons.file_copy,
                   const Color(0xFF1976D2),
                   onTap: () => Navigator.push(
@@ -104,10 +102,21 @@ class FinancialDashboard extends StatelessWidget {
                       MaterialPageRoute(builder: (context) => const InvoicesManagementScreen())),
                 ),
 
-                // 3. كرت إعدادات الحسابات (تم الربط بصفحة الاشتراكات الآن)
+                // 3. كرت إدارة المصروفات (الكرت الجديد ✅)
                 _buildMenuCard(
                   context,
-                  "إعدادات الحسابات",
+                  "إدارة المصروفات",
+                  Icons.payments,
+                  const Color(0xFFD32F2F),
+                  onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const GeneralExpensesScreen())),
+                ),
+
+                // 4. كرت إعدادات باقات الاشتراك (تم تعديل المسمى)
+                _buildMenuCard(
+                  context,
+                  "إعدادات باقات الاشتراك",
                   Icons.settings_applications,
                   Colors.blueGrey,
                   onTap: () => Navigator.push(
@@ -115,28 +124,29 @@ class FinancialDashboard extends StatelessWidget {
                       MaterialPageRoute(builder: (context) => const SubscriptionsScreen())),
                 ),
 
-                // 4. بقية الكروت (للتطوير لاحقاً)
+                // 5. كرت الحركة المالية (الدفع الإلكتروني)
                 _buildMenuCard(
-  context, 
-  "الحركة المالية", 
-  Icons.account_balance, // تغيير الأيقونة لأيقونة بنكية لتدل على الدفع الإلكتروني
-  const Color(0xFF388E3C),
-  onTap: () => Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => RevenueScreen())), // الشاشة اللي سحبنا فيها بيانات بايموب
-),
-                // 5. كرت الأرباح والخسائر (تم الربط الآن)
-_buildMenuCard(
-  context,
-  "الأرباح والخسائر",
-  Icons.trending_up,
-  const Color(0xFF7B1FA2),
-  onTap: () => Navigator.push(
-    context,
-    MaterialPageRoute(builder: (context) => const FinancialAnalyticsScreen())
-  ),
-),
+                  context,
+                  "الحركة المالية",
+                  Icons.account_balance, 
+                  const Color(0xFF388E3C),
+                  onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => RevenueScreen())),
+                ),
 
+                // 6. كرت الأرباح والخسائر
+                _buildMenuCard(
+                  context,
+                  "الأرباح والخسائر",
+                  Icons.trending_up,
+                  const Color(0xFF7B1FA2),
+                  onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const FinancialAnalyticsScreen())),
+                ),
+
+                // 7. التقارير الضريبية
                 _buildMenuCard(context, "التقارير الضريبية", Icons.description, Colors.redAccent),
               ],
             ),
@@ -198,5 +208,4 @@ _buildMenuCard(
     );
   }
 }
-
 
