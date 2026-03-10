@@ -24,7 +24,8 @@ class RevenueController extends ChangeNotifier {
     try {
       // بنجيب بس الفواتير اللي حالتها paid
       QuerySnapshot snapshot = await _db.collection('pendingInvoices')
-          .where('status', '==', 'paid')
+          .where('status', isEqualTo: 'paid')
+
           .orderBy('paidAt', descending: true)
           .get();
 
