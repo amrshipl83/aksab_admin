@@ -12,62 +12,43 @@ class SubscriptionsScreen extends StatefulWidget {
 class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
   final _db = FirebaseFirestore.instance;
 
-  // 1. إضافة باقة جديدة
-  Future<void> _addNewPlan() async {
-    try {
-      await _db.collection('subscription_plans').add({
-        'planName': 'باقة جديدة',
-        'price': 100.0,
-        'durationDays': 30,
-        'features': [
-          {'key': 'default', 'label': 'ميزة افتراضية', 'value': true}
-        ]
-      });
-      _showSnackBar("تم إضافة باقة جديدة", Colors.green);
-    } catch (e) {
-      _showSnackBar("خطأ: $e", Colors.red);
-    }
-  }
+  // 🛠️ حوار إضافة باقة جديدة (الكتالوج اليدوي)
+  Future<void> _showAddPlanDialog() async {
+    final nameController = TextEditingController();
+    final priceController = TextEditingController();
+    final durationController = TextEditingController();
 
-  // 2. حذف باقة
-  Future<void> _deletePlan(String docId) async {
-    try {
-      await _db.collection('subscription_plans').doc(docId).delete();
-      _showSnackBar("تم حذف الباقة", Colors.orange);
-    } catch (e) {
-      _showSnackBar("خطأ في الحذف", Colors.red);
-    }
-  }
-
-  // 3. إضافة ميزة جديدة
-  Future<void> _addNewFeature(String docId) async {
-    String label = "";
     await showDialog(
       context: context,
       builder: (context) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          title: const Text("إضافة ميزة جديدة", style: TextStyle(fontFamily: 'Cairo')),
-          content: TextField(
-            decoration: const InputDecoration(hintText: "اسم الميزة"),
-            onChanged: (v) => label = v,
+          title: const Text("إضافة باقة اشتراك جديدة", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: nameController, decoration: const InputDecoration(labelText: "اسم الباقة (مثلاً: الباقة الذهبية)")),
+                TextField(controller: priceController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "السعر (EGP)")),
+                TextField(controller: durationController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "المدة (بالأيام)")),
+              ],
+            ),
           ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
             ElevatedButton(
               onPressed: () async {
-                if (label.isEmpty) return;
-                DocumentSnapshot doc = await _db.collection('subscription_plans').doc(docId).get();
-                List features = List.from(doc['features'] ?? []);
-                features.add({
-                  'key': DateTime.now().millisecondsSinceEpoch.toString(),
-                  'label': label,
-                  'value': false 
+                if (nameController.text.isEmpty || priceController.text.isEmpty) return;
+                await _db.collection('subscription_plans').add({
+                  'planName': nameController.text.trim(),
+                  'price': double.tryParse(priceController.text) ?? 0.0,
+                  'durationDays': int.tryParse(durationController.text) ?? 30,
+                  'features': [] // تبدأ بدون مميزات وتضيفها براحتك
                 });
-                await _db.collection('subscription_plans').doc(docId).update({'features': features});
                 Navigator.pop(context);
+                _showSnackBar("تم إضافة الباقة بنجاح", Colors.green);
               },
-              child: const Text("إضافة"),
+              child: const Text("حفظ الباقة"),
             )
           ],
         ),
@@ -75,57 +56,9 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     );
   }
 
-  // 4. تحديث حقل أساسي
-  Future<void> _updateBasicField(String docId, String fieldName, dynamic newValue) async {
-    try {
-      await _db.collection('subscription_plans').doc(docId).update({fieldName: newValue});
-    } catch (e) {
-      _showSnackBar("خطأ في التحديث", Colors.red);
-    }
-  }
-
-  // 5. تحديث ميزة
-  Future<void> _updateFeatureValue(String docId, String featureKey, dynamic newValue) async {
-    try {
-      DocumentSnapshot doc = await _db.collection('subscription_plans').doc(docId).get();
-      List features = List.from(doc['features'] ?? []);
-      for (var f in features) {
-        if (f['key'] == featureKey) { f['value'] = newValue; }
-      }
-      await _db.collection('subscription_plans').doc(docId).update({'features': features});
-    } catch (e) {
-      _showSnackBar("خطأ في تحديث الميزة", Colors.red);
-    }
-  }
-
-  // 6. حوار التعديل
-  void _showEditDialog(String docId, String title, dynamic currentValue, Function(dynamic) onConfirm) {
-    TextEditingController controller = TextEditingController(text: currentValue.toString());
-    showDialog(
-      context: context,
-      builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          title: Text("تعديل $title"),
-          content: TextFormField(
-            controller: controller,
-            keyboardType: currentValue is num ? TextInputType.number : TextInputType.text,
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
-            ElevatedButton(
-              onPressed: () {
-                dynamic val = controller.text;
-                if (currentValue is num) val = num.tryParse(controller.text) ?? currentValue;
-                onConfirm(val);
-                Navigator.pop(context);
-              },
-              child: const Text("حفظ"),
-            ),
-          ],
-        ),
-      ),
-    );
+  // تحديث القيم الأساسية
+  Future<void> _updateField(String docId, String field, dynamic value) async {
+    await _db.collection('subscription_plans').doc(docId).update({field: value});
   }
 
   void _showSnackBar(String msg, Color color) {
@@ -134,18 +67,24 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 📱 تحديد عدد الأعمدة حسب حجم الشاشة
+    double width = MediaQuery.of(context).size.width;
+    int crossAxisCount = width > 1200 ? 4 : (width > 800 ? 3 : (width > 600 ? 2 : 1));
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('إدارة باقات الاشتراك', style: TextStyle(fontFamily: 'Cairo')),
-        backgroundColor: const Color(0xFFB21F2D),
+        title: const Text('إدارة خطط الاشتراكات', style: TextStyle(fontFamily: 'Cairo')),
+        backgroundColor: const Color(0xFF2c3e50),
         actions: [
-          ElevatedButton.icon(
-            onPressed: _addNewPlan,
-            icon: const Icon(Icons.add),
-            label: const Text("إضافة باقة"),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: ElevatedButton.icon(
+              onPressed: _showAddPlanDialog,
+              icon: const Icon(Icons.add_business),
+              label: const Text("إنشاء باقة جديدة"),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+            ),
           ),
-          const SizedBox(width: 10),
         ],
       ),
       body: Directionality(
@@ -154,21 +93,21 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
           stream: _db.collection('subscription_plans').orderBy('price').snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text("لا توجد باقات. اضغط إضافة باقة"));
+            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text("لا توجد باقات حالياً"));
 
             return GridView.builder(
-              padding: const EdgeInsets.all(20),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3, 
-                childAspectRatio: 0.75,
-                crossAxisSpacing: 20,
-                mainAxisSpacing: 20,
+              padding: const EdgeInsets.all(15),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxisCount,
+                childAspectRatio: 0.85,
+                crossAxisSpacing: 15,
+                mainAxisSpacing: 15,
               ),
               itemCount: snapshot.data!.docs.length,
               itemBuilder: (context, index) {
                 var doc = snapshot.data!.docs[index];
                 var plan = doc.data() as Map<String, dynamic>;
-                return _buildPlanEditorCard(doc.id, plan);
+                return _buildResponsivePlanCard(doc.id, plan);
               },
             );
           },
@@ -177,70 +116,116 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
     );
   }
 
-  Widget _buildPlanEditorCard(String id, Map<String, dynamic> plan) {
+  Widget _buildResponsivePlanCard(String id, Map<String, dynamic> plan) {
     return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      elevation: 5,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Column(
         children: [
+          // رأس الكارت - الاسم والسعر
           Container(
-            padding: const EdgeInsets.all(12),
-            decoration: const BoxDecoration(
-              color: Color(0xFF2c3e50),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+            width: double.infinity,
+            padding: const EdgeInsets.all(15),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: [Colors.blueGrey[800]!, Colors.blueGrey[600]!]),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
               children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () => _showEditDialog(id, "الاسم", plan['planName'], (v) => _updateBasicField(id, 'planName', v)),
-                    child: Text(plan['planName'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-                IconButton(icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20), onPressed: () => _deletePlan(id)),
+                Text(plan['planName'], style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 5),
+                Text("${plan['price']} EGP", style: const TextStyle(color: Colors.greenAccent, fontSize: 20, fontWeight: FontWeight.w900)),
               ],
             ),
           ),
+          // تفاصيل الباقة والمميزات
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.all(15),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
               children: [
-                _buildEditableTile("السعر", "${plan['price']} EGP", () => _showEditDialog(id, "السعر", plan['price'], (v) => _updateBasicField(id, 'price', v))),
-                _buildEditableTile("المدة (أيام)", "${plan['durationDays']}", () => _showEditDialog(id, "المدة", plan['durationDays'], (v) => _updateBasicField(id, 'durationDays', v))),
-                const Divider(),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text("المميزات:", style: TextStyle(fontWeight: FontWeight.bold)),
-                    TextButton(onPressed: () => _addNewFeature(id), child: const Text("+ إضافة ميزة")),
-                  ],
+                ListTile(
+                  leading: const Icon(Icons.timer, color: Colors.orange),
+                  title: const Text("المدة"),
+                  subtitle: Text("${plan['durationDays']} يوم"),
+                  onTap: () => _showEditValue(id, "المدة بالايام", 'durationDays', plan['durationDays']),
                 ),
-                ...(plan['features'] as List? ?? []).map((f) => _buildFeatureControl(id, f)).toList(),
+                const Divider(),
+                const Text(" المميزات الفعالة:", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                ...(plan['features'] as List? ?? []).map((f) => CheckboxListTile(
+                  title: Text(f['label'], style: const TextStyle(fontSize: 12)),
+                  value: f['value'],
+                  onChanged: (val) => _toggleFeature(id, f['key'], val!),
+                )).toList(),
               ],
             ),
+          ),
+          // أزرار التحكم السفلى
+          ButtonBar(
+            alignment: MainAxisAlignment.center,
+            children: [
+              IconButton(icon: const Icon(Icons.edit_note, color: Colors.blue), onPressed: () => _showEditValue(id, "الاسم", 'planName', plan['planName'])),
+              IconButton(icon: const Icon(Icons.add_task, color: Colors.green), onPressed: () => _addNewFeature(id)),
+              IconButton(icon: const Icon(Icons.delete_forever, color: Colors.red), onPressed: () => _confirmDelete(id)),
+            ],
           )
         ],
       ),
     );
   }
 
-  Widget _buildEditableTile(String label, String value, VoidCallback onTap) {
-    return ListTile(
-      dense: true,
-      onTap: onTap,
-      title: Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-      subtitle: Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-      trailing: const Icon(Icons.edit, size: 14),
+  // دالة تعديل سريعة
+  void _showEditValue(String id, String label, String field, dynamic current) {
+    final controller = TextEditingController(text: current.toString());
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("تعديل $label"),
+        content: TextField(controller: controller, keyboardType: current is num ? TextInputType.number : TextInputType.text),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("إلغاء")),
+          ElevatedButton(onPressed: () {
+            _updateField(id, field, current is num ? (num.tryParse(controller.text) ?? current) : controller.text);
+            Navigator.pop(ctx);
+          }, child: const Text("حفظ")),
+        ],
+      ),
     );
   }
 
-  Widget _buildFeatureControl(String docId, Map<String, dynamic> feature) {
-    return SwitchListTile(
-      dense: true,
-      title: Text(feature['label'] ?? "", style: const TextStyle(fontSize: 13)),
-      value: feature['value'] ?? false,
-      onChanged: (val) => _updateFeatureValue(docId, feature['key'], val),
-    );
+  // دوال الحذف والتبديل (نفس المنطق السابق مع تحسين الأداء)
+  Future<void> _toggleFeature(String docId, String featureKey, bool newValue) async {
+     DocumentSnapshot doc = await _db.collection('subscription_plans').doc(docId).get();
+     List features = List.from(doc['features'] ?? []);
+     for (var f in features) { if (f['key'] == featureKey) f['value'] = newValue; }
+     await _db.collection('subscription_plans').doc(docId).update({'features': features});
+  }
+
+  Future<void> _addNewFeature(String id) async {
+    String label = "";
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      title: const Text("إضافة ميزة للباقة"),
+      content: TextField(onChanged: (v) => label = v, decoration: const InputDecoration(hintText: "مثلاً: دعم فني 24 ساعة")),
+      actions: [
+        ElevatedButton(onPressed: () async {
+          if (label.isEmpty) return;
+          await _db.collection('subscription_plans').doc(id).update({
+            'features': FieldValue.arrayUnion([{'key': DateTime.now().toString(), 'label': label, 'value': true}])
+          });
+          Navigator.pop(ctx);
+        }, child: const Text("إضافة"))
+      ],
+    ));
+  }
+
+  void _confirmDelete(String id) {
+    showDialog(context: context, builder: (ctx) => AlertDialog(
+      title: const Text("حذف الباقة"),
+      content: const Text("هل أنت متأكد؟ لا يمكن التراجع."),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("إلغاء")),
+        TextButton(onPressed: () { _db.collection('subscription_plans').doc(id).delete(); Navigator.pop(ctx); }, child: const Text("حذف", style: TextStyle(color: Colors.red))),
+      ],
+    ));
   }
 }
+
