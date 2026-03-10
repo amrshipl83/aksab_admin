@@ -74,7 +74,7 @@ class _GeneralExpensesScreenState extends State<GeneralExpensesScreen> {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const AddExpenseScreen()),
+            MaterialPageRoute(builder: (context) =>  AddExpenseScreen()),
           );
         },
         label: const Text("إضافة مصروف", style: TextStyle(fontFamily: 'Cairo')),
