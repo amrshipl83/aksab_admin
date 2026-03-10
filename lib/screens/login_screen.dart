@@ -12,10 +12,29 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
-  final _passwordController = TextEditingController(); // كنترولر الباسورد
-  bool _isLoading = false;
+  final _passwordController = TextEditingController();
+  bool _isLoading = true; // خليناها true في البداية عشان بنشيك على الجلسة
   bool _isPasswordVisible = false;
   String _message = '';
+
+  @override
+  void initState() {
+    super.initState();
+    // 🚀 أول ما الصفحة تفتح، بنشيك هل فيه "جيميني" قصدي مستخدم مسجل؟
+    _checkExistingSession();
+  }
+
+  // دالة فحص الجلسة المؤقتة
+  Future<void> _checkExistingSession() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      // لو فيه مستخدم، بنروح نجيب صلاحياته ونحوله فوراً
+      await _proceedToDashboard(user.uid);
+    } else {
+      // لو مفيش، بنظهر صفحة اللوجن عادي
+      setState(() => _isLoading = false);
+    }
+  }
 
   Future<void> _login() async {
     final email = _emailController.text.trim();
@@ -28,47 +47,67 @@ class _LoginScreenState extends State<LoginScreen> {
 
     setState(() => _isLoading = true);
     try {
-      // ✅ تسجيل الدخول المباشر
       final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
 
       if (userCredential.user != null) {
-        _proceedToDashboard(userCredential.user!.uid);
+        await _proceedToDashboard(userCredential.user!.uid);
       }
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'user-not-found') {
-        setState(() => _message = "❌ هذا البريد غير مسجل");
-      } else if (e.code == 'wrong-password') {
-        setState(() => _message = "❌ كلمة المرور غير صحيحة");
-      } else {
-        setState(() => _message = "❌ خطأ في الدخول: ${e.message}");
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      setState(() {
+        if (e.code == 'user-not-found') {
+          _message = "❌ هذا البريد غير مسجل";
+        } else if (e.code == 'wrong-password') {
+          _message = "❌ كلمة المرور غير صحيحة";
+        } else {
+          _message = "❌ خطأ في الدخول: ${e.message}";
+        }
+        _isLoading = false;
+      });
     }
   }
 
   Future<void> _proceedToDashboard(String uid) async {
-    var adminDoc = await FirebaseFirestore.instance.collection('admins').doc(uid).get();
-    if (adminDoc.exists) {
-      _navigate(adminDoc.get('role') ?? 'user');
-    } else {
-      setState(() => _message = "❌ ليس لديك صلاحيات دخول كمسؤول");
-      await FirebaseAuth.instance.signOut();
+    try {
+      var adminDoc = await FirebaseFirestore.instance.collection('admins').doc(uid).get();
+      if (adminDoc.exists) {
+        String role = adminDoc.get('role') ?? 'user';
+        _navigate(role);
+      } else {
+        setState(() {
+          _message = "❌ ليس لديك صلاحيات دخول كمسؤول";
+          _isLoading = false;
+        });
+        await FirebaseAuth.instance.signOut();
+      }
+    } catch (e) {
+      setState(() {
+        _message = "❌ خطأ في الاتصال بالسيرفر";
+        _isLoading = false;
+      });
     }
   }
 
   void _navigate(String role) {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => DashboardScreen(userRole: role)),
-    );
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => DashboardScreen(userRole: role)),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    // لو بنحمل (بنشيك على الجلسة)، بنظهر لودنج بس
+    if (_isLoading && _emailController.text.isEmpty) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator(color: Color(0xFF1F2937))),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF2F4F8),
       body: Center(
