@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart'; // تأكد من إضافة url_launcher في pubspec.yaml
+import 'package:url_launcher/url_launcher.dart'; 
 import 'add_expense_screen.dart';
 
 class GeneralExpensesScreen extends StatefulWidget {
@@ -15,7 +15,7 @@ class _GeneralExpensesScreenState extends State<GeneralExpensesScreen> {
   final List<DocumentSnapshot> _expenses = [];
   bool _isLoading = false;
   bool _hasMore = true;
-  String? _indexErrorUrl; // لتخزين رابط الإندكس لو وجد
+  String? _indexErrorUrl; 
   String _activeFilter = 'all'; 
   final int _documentLimit = 8;
   DocumentSnapshot? _lastDocument;
@@ -35,7 +35,6 @@ class _GeneralExpensesScreenState extends State<GeneralExpensesScreen> {
     _getExpenses();
   }
 
-  // --- دالة جلب البيانات بنظام الدفعات ---
   Future<void> _getExpenses({bool isRefresh = false}) async {
     if (_isLoading || (!_hasMore && !isRefresh)) return;
 
@@ -54,12 +53,10 @@ class _GeneralExpensesScreenState extends State<GeneralExpensesScreen> {
           .collection('platform_ledger')
           .where('entryType', isEqualTo: 'expense');
 
-      // تطبيق الفلتر لو مش "الكل"
       if (_activeFilter != 'all') {
         query = query.where('source', isEqualTo: _activeFilter);
       }
 
-      // الترتيب ضروري للـ Pagination
       query = query.orderBy('createdAt', descending: true).limit(_documentLimit);
 
       if (_lastDocument != null) {
@@ -77,7 +74,6 @@ class _GeneralExpensesScreenState extends State<GeneralExpensesScreen> {
         _expenses.addAll(querySnapshot.docs);
       }
     } catch (e) {
-      // فحص إذا كان الخطأ بسبب نقص الـ Index (بيظهر الرابط في نص الخطأ)
       String errorStr = e.toString();
       if (errorStr.contains('https://console.firebase.google.com')) {
         int startIndex = errorStr.indexOf('https://');
@@ -101,8 +97,6 @@ class _GeneralExpensesScreenState extends State<GeneralExpensesScreen> {
       body: Column(
         children: [
           _buildTotalExpensesHeader(),
-          
-          // --- شريط الفلاتر الأفقي ---
           Container(
             height: 60,
             padding: const EdgeInsets.symmetric(vertical: 10),
@@ -112,10 +106,9 @@ class _GeneralExpensesScreenState extends State<GeneralExpensesScreen> {
               children: _expenseSources.entries.map((e) => _buildFilterChip(e.key, e.value)).toList(),
             ),
           ),
-
           Expanded(
             child: _indexErrorUrl != null 
-              ? _buildIndexErrorUI() // عرض واجهة إصلاح الإندكس
+              ? _buildIndexErrorUI() 
               : _expenses.isEmpty && _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _expenses.isEmpty
@@ -148,7 +141,6 @@ class _GeneralExpensesScreenState extends State<GeneralExpensesScreen> {
     );
   }
 
-  // ويلجت الفلتر
   Widget _buildFilterChip(String key, String label) {
     bool isSelected = _activeFilter == key;
     return Padding(
@@ -167,30 +159,36 @@ class _GeneralExpensesScreenState extends State<GeneralExpensesScreen> {
     );
   }
 
-  // واجهة في حال طلب Firebase بناء Index
+  // ✅ التصحيح هنا: استخدام Padding مع Center
   Widget _buildIndexErrorUI() {
-    return Center(
+    return Padding(
       padding: const EdgeInsets.all(20),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 80),
-          const SizedBox(height: 10),
-          const Text("مطلوب تفعيل الـ Index", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 18)),
-          const Text("هذا الإجراء مطلوب مرة واحدة عند استخدام الفلتر لأول مرة", textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Cairo')),
-          const SizedBox(height: 20),
-          ElevatedButton.icon(
-            onPressed: () => launchUrl(Uri.parse(_indexErrorUrl!)),
-            icon: const Icon(Icons.open_in_new),
-            label: const Text("اضغط هنا لتفعيل الـ Index الآن"),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-          )
-        ],
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 80),
+            const SizedBox(height: 10),
+            const Text("مطلوب تفعيل الـ Index", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 18)),
+            const Text("هذا الإجراء مطلوب مرة واحدة عند استخدام الفلتر لأول مرة", textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Cairo')),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () async {
+                final uri = Uri.parse(_indexErrorUrl!);
+                if (await canLaunchUrl(uri)) {
+                  await launchUrl(uri);
+                }
+              },
+              icon: const Icon(Icons.open_in_new, color: Colors.white),
+              label: const Text("تفعيل الـ Index الآن", style: TextStyle(color: Colors.white)),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            )
+          ],
+        ),
       ),
     );
   }
 
-  // زر تحميل المزيد
   Widget _buildLoadMoreButton() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 15),
@@ -202,7 +200,6 @@ class _GeneralExpensesScreenState extends State<GeneralExpensesScreen> {
     );
   }
 
-  // الهيدر الإجمالي
   Widget _buildTotalExpensesHeader() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('platform_ledger').where('entryType', isEqualTo: 'expense').snapshots(),
@@ -229,14 +226,13 @@ class _GeneralExpensesScreenState extends State<GeneralExpensesScreen> {
     );
   }
 
-  // كارت المصروف
   Widget _buildExpenseCard(Map<String, dynamic> data) {
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
         title: Text(data['details'] ?? '', style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-        subtitle: Text("${data['period']} | ${data['source']}", style: const TextStyle(fontSize: 12)),
+        subtitle: Text("${data['period']} | ${_expenseSources[data['source']] ?? data['source']}", style: const TextStyle(fontSize: 12)),
         trailing: Text("-${data['totalAmount']} ج.م", style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
         onTap: () {
           if (data['attachmentUrl'] != null) {
