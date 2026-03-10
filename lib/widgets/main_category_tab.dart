@@ -14,10 +14,13 @@ class MainCategoryTab extends StatefulWidget {
 class _MainCategoryTabState extends State<MainCategoryTab> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _orderController = TextEditingController();
+  final ScrollController _scrollController = ScrollController(); // للتحكم في الصعود لأعلى
+
   XFile? _selectedImage;
-  String? _existingImageUrl; // لحفظ رابط الصورة الحالية عند التعديل
-  String? _editingDocId;    // المعرف الخاص بالقسم الذي يتم تعديله حالياً
+  String? _existingImageUrl;
+  String? _editingDocId;
   bool _isLoading = false;
+  bool _isForConsumer = false; // المتغير الخاص بالشيك بوكس
 
   final String cloudName = "dgmmx6jbu";
   final String uploadPreset = "commerce";
@@ -28,23 +31,28 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
     if (pickedFile != null) {
       setState(() {
         _selectedImage = pickedFile;
-        _existingImageUrl = null; // بمجرد اختيار صورة جديدة، نلغي القديمة
+        _existingImageUrl = null;
       });
     }
   }
 
-  // دالة لبدء وضع التعديل
   void _prepareUpdate(DocumentSnapshot doc) {
     setState(() {
       _editingDocId = doc.id;
       _nameController.text = doc['name'];
       _orderController.text = doc['order'].toString();
       _existingImageUrl = doc['imageUrl'];
-      _selectedImage = null; // لم نختر ملفاً جديداً بعد
+      _selectedImage = null;
+      
+      // قراءة حالة متاح للمستهلك
+      final behavior = doc.data().toString().contains('offerBehavior') ? doc['offerBehavior'] : "";
+      _isForConsumer = (behavior == "supermarket_offers");
     });
+    
+    // 🚀 التحديث يطلعك فوق أوتوماتيكياً
+    _scrollController.animateTo(0, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut);
   }
 
-  // دالة لمسح الحقول والعودة لوضع الإضافة
   void _resetForm() {
     setState(() {
       _editingDocId = null;
@@ -52,7 +60,26 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
       _orderController.clear();
       _selectedImage = null;
       _existingImageUrl = null;
+      _isForConsumer = false;
     });
+  }
+
+  // رسالة نجاح في منتصف الشاشة
+  void _showSuccessDialog(String msg) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.check_circle, color: Colors.green, size: 60),
+            const SizedBox(height: 15),
+            Text(msg, style: const TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+          ],
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("تم"))],
+      ),
+    );
   }
 
   Future<Map<String, String>?> _uploadToCloudinary(XFile xFile) async {
@@ -74,7 +101,6 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
   }
 
   Future<void> _saveMainCategory() async {
-    // التحقق: إذا كان تعديل، الصورة ليست إجبارية (ممكن نعدل الاسم فقط)
     if (_nameController.text.isEmpty || (_selectedImage == null && _existingImageUrl == null)) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("يرجى إدخال الاسم والصورة")));
       return;
@@ -85,7 +111,6 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
       String? finalImageUrl = _existingImageUrl;
       String? finalPublicId;
 
-      // إذا اختار المستخدم صورة جديدة، نرفعها
       if (_selectedImage != null) {
         final uploadResult = await _uploadToCloudinary(_selectedImage!);
         if (uploadResult != null) {
@@ -99,21 +124,23 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
         'order': int.tryParse(_orderController.text) ?? 0,
         'imageUrl': finalImageUrl,
         'status': 'active',
+        'updatedAt': FieldValue.serverTimestamp(),
+        // 💡 إضافة الحقل المطلوب بالمنطق اللي طلبته
+        'offerBehavior': _isForConsumer ? "supermarket_offers" : "",
       };
+
       if (finalPublicId != null) data['imagePublicId'] = finalPublicId;
 
       if (_editingDocId != null) {
-        // تحديث (Update)
         await FirebaseFirestore.instance.collection('mainCategory').doc(_editingDocId).update(data);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم تحديث القسم بنجاح")));
+        _showSuccessDialog("تم تحديث القسم بنجاح");
+        // ملحوظة: هنا مش بنعمل _resetForm عشان الحقول متتمسحش وتفضل قدامك
       } else {
-        // إضافة جديد (Add)
         data['createdAt'] = FieldValue.serverTimestamp();
         await FirebaseFirestore.instance.collection('mainCategory').add(data);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم إضافة القسم بنجاح")));
+        _showSuccessDialog("تم إضافة القسم بنجاح");
+        _resetForm(); // في حالة الإضافة الجديدة فقط نمسح الحقول
       }
-
-      _resetForm();
     } finally {
       setState(() => _isLoading = false);
     }
@@ -122,12 +149,24 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
+      controller: _scrollController, // ربط السكرول
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
           TextField(controller: _nameController, textAlign: TextAlign.right, decoration: const InputDecoration(labelText: "اسم القسم الرئيسي", border: OutlineInputBorder())),
           const SizedBox(height: 15),
           TextField(controller: _orderController, keyboardType: TextInputType.number, textAlign: TextAlign.right, decoration: const InputDecoration(labelText: "الترتيب", border: OutlineInputBorder())),
+          const SizedBox(height: 15),
+          
+          // 💡 الشيك بوكس الجديد
+          CheckboxListTile(
+            title: const Text("متاح للمستهلك (عروض سوبر ماركت)", textAlign: TextAlign.right),
+            value: _isForConsumer,
+            activeColor: const Color(0xFF4361ee),
+            onChanged: (val) => setState(() => _isForConsumer = val ?? false),
+            controlAffinity: ListTileControlAffinity.leading,
+          ),
+          
           const SizedBox(height: 15),
           GestureDetector(
             onTap: _pickImage,
@@ -138,23 +177,23 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
                   ? const Center(child: Text("اضغط لرفع صورة القسم الرئيسي"))
                   : ClipRRect(
                       borderRadius: BorderRadius.circular(10),
-                      child: _selectedImage != null 
-                        ? Image.network(_selectedImage!.path, fit: BoxFit.cover) // عرض صورة من الجهاز
-                        : Image.network(_existingImageUrl!, fit: BoxFit.cover), // عرض صورة من السيرفر عند التعديل
+                      child: _selectedImage != null
+                        ? Image.network(_selectedImage!.path, fit: BoxFit.cover)
+                        : Image.network(_existingImageUrl!, fit: BoxFit.cover),
                     ),
             ),
           ),
           const SizedBox(height: 20),
           Row(
             children: [
-              if (_editingDocId != null) // زر إلغاء التعديل
+              if (_editingDocId != null)
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.only(left: 8.0),
                     child: ElevatedButton(
                       onPressed: _resetForm,
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
-                      child: const Text("إلغاء", style: TextStyle(color: Colors.white)),
+                      child: const Text("إلغاء التعديل", style: TextStyle(color: Colors.white)),
                     ),
                   ),
                 ),
@@ -162,9 +201,9 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _saveMainCategory,
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4361ee)),
-                  child: _isLoading 
-                    ? const CircularProgressIndicator(color: Colors.white) 
-                    : Text(_editingDocId == null ? "حفظ القسم الرئيسي" : "تحديث البيانات", style: const TextStyle(color: Colors.white)),
+                  child: _isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : Text(_editingDocId == null ? "حفظ القسم الرئيسي" : "تحديث البيانات الآن", style: const TextStyle(color: Colors.white)),
                 ),
               ),
             ],
@@ -173,23 +212,24 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('mainCategory').orderBy('order').snapshots(),
             builder: (context, snapshot) {
-              if (!snapshot.hasData) return const CircularProgressIndicator();
+              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
               return ListView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: snapshot.data!.docs.length,
                 itemBuilder: (context, index) {
                   var doc = snapshot.data!.docs[index];
+                  bool isPromo = (doc.data().toString().contains('offerBehavior') && doc['offerBehavior'] == "supermarket_offers");
+                  
                   return ListTile(
                     leading: CircleAvatar(backgroundImage: NetworkImage(doc['imageUrl'])),
                     title: Text(doc['name']),
-                    subtitle: Text("ترتيب: ${doc['order']}"),
+                    subtitle: Text("ترتيب: ${doc['order']} ${isPromo ? ' | 🎁 عرض' : ''}"),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () => _prepareUpdate(doc)),
-                        IconButton(icon: const Icon(Icons.delete, color: Colors.red), 
-                          onPressed: () => _showDeleteDialog(doc.id)),
+                        IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => _showDeleteDialog(doc.id)),
                       ],
                     ),
                   );
@@ -202,21 +242,20 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
     );
   }
 
-  // حماية إضافية: تنبيه قبل الحذف
   void _showDeleteDialog(String id) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("تنبيه"),
-        content: const Text("هل أنت متأكد من حذف القسم؟ سيؤثر هذا على البيانات المرتبطة به."),
+        title: const Text("تنبيه الحذف"),
+        content: const Text("هل أنت متأكد من حذف هذا القسم نهائياً؟"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("إلغاء")),
           TextButton(
             onPressed: () {
               FirebaseFirestore.instance.collection('mainCategory').doc(id).delete();
               Navigator.pop(ctx);
-            }, 
-            child: const Text("حذف", style: TextStyle(color: Colors.red))
+            },
+            child: const Text("حذف", style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
