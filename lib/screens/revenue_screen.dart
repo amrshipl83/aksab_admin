@@ -127,7 +127,20 @@ class _RevenueScreenState extends State<RevenueScreen> {
           ],
           rows: provider.transactions.map((tx) {
             return DataRow(cells: [
-              DataCell(Text(tx.payerName, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13))),
+              DataCell(
+  Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    mainAxisAlignment: MainAxisAlignment.center,
+    children: [
+      Text(tx.payerName, 
+        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF2D3436))),
+      const SizedBox(height: 2),
+      Text(tx.phone, 
+        style: TextStyle(color: Colors.grey[600], fontSize: 11, fontFamily: 'monospace')),
+    ],
+  ),
+),
+
               DataCell(_buildTypeBadge(tx.type)),
               DataCell(Text("${tx.amount} ج.م", 
                 style: TextStyle(color: Colors.green[700], fontWeight: FontWeight.bold))),
