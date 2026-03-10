@@ -1,11 +1,12 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart'; // مهم لدعم kIsWeb
+import 'package:flutter/foundation.dart'; // لدعم kIsWeb
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // لإضافة الـ HapticFeedback
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
-import 'dart:io' show File; // استخدام مشروط للـ File
+import 'dart:io' show File; 
 
 class AddExpenseScreen extends StatefulWidget {
   const AddExpenseScreen({super.key});
@@ -21,7 +22,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
 
   String _selectedSource = 'office';
   DateTime _selectedDate = DateTime.now();
-  dynamic _imageFile; // تغيير النوع ليدعم الويب والموبايل
+  dynamic _imageFile; 
   bool _isUploading = false;
 
   final Map<String, String> _expenseSources = {
@@ -37,12 +38,12 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     final pickedFile = await ImagePicker().pickImage(source: source, imageQuality: 70);
     if (pickedFile != null) {
       setState(() {
-        _imageFile = pickedFile; // نخزن الـ XFile مباشرة
+        _imageFile = pickedFile; 
       });
     }
   }
 
-  // --- دالة الرفع إلى Cloudinary (تدعم الويب والموبايل) ---
+  // --- دالة الرفع إلى Cloudinary تدعم الويب والموبايل ---
   Future<String?> _uploadToCloudinary() async {
     if (_imageFile == null) return null;
 
@@ -54,7 +55,6 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       final request = http.MultipartRequest('POST', url)
         ..fields['upload_preset'] = uploadPreset;
 
-      // قراءة الملف كـ Bytes لضمان العمل على الويب
       final bytes = await _imageFile.readAsBytes();
       request.files.add(http.MultipartFile.fromBytes(
         'file',
@@ -75,6 +75,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     return null;
   }
 
+  // --- دالة حفظ المصروف ---
   Future<void> _saveExpense() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -104,44 +105,59 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       });
 
       if (mounted) {
-        // رسالة نجاح في منتصف الشاشة
-        _showSuccessDialog();
+        setState(() => _isUploading = false);
         
-        // تصفير البيانات للبقاء في نفس الصفحة وإضافة مصروف جديد
-        _formKey.currentState!.reset();
-        _amountController.clear();
-        _detailsController.clear();
-        setState(() {
-          _imageFile = null;
-          _selectedDate = DateTime.now();
-        });
+        // تفعيل الاهتزاز عند النجاح
+        HapticFeedback.heavyImpact();
+        
+        // إظهار رسالة النجاح
+        _showSuccessDialog();
       }
     } catch (e) {
+      setState(() => _isUploading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("حدث خطأ: $e"), backgroundColor: Colors.red),
       );
-    } finally {
-      setState(() => _isUploading = false);
     }
   }
 
+  // --- نافذة النجاح مع تصفير البيانات عند الإغلاق ---
   void _showSuccessDialog() {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        content: const Column(
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.check_circle, color: Colors.green, size: 60),
-            SizedBox(height: 15),
-            Text("تم الحفظ بنجاح ✅", style: TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.bold)),
-            SizedBox(height: 5),
-            Text("يمكنك الآن إضافة مصروف آخر أو العودة", textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Cairo')),
+            const Icon(Icons.check_circle, color: Colors.green, size: 70),
+            const SizedBox(height: 15),
+            const Text("تم الحفظ بنجاح ✅", 
+              style: TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            const Text("تم تسجيل المصروف وإرفاق المستند في السجلات المالية لشركة رابية أحلى.", 
+              textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Cairo', fontSize: 14)),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("حسناً", style: TextStyle(fontFamily: 'Cairo'))),
+          Center(
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: StadiumBorder()),
+              onPressed: () {
+                // تصفير البيانات للبقاء في نفس الصفحة وإضافة مصروف جديد
+                _formKey.currentState!.reset();
+                _amountController.clear();
+                _detailsController.clear();
+                setState(() {
+                  _imageFile = null;
+                  _selectedDate = DateTime.now();
+                });
+                Navigator.pop(context);
+              },
+              child: const Text("حسناً، إضافة مصروف آخر", style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
+            ),
+          ),
         ],
       ),
     );
@@ -151,86 +167,116 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("تسجيل مصروف جديد", style: TextStyle(fontFamily: 'Cairo')),
+        title: const Text("تسجيل مصروف بمستند", style: TextStyle(fontFamily: 'Cairo')),
         backgroundColor: const Color(0xFFB21F2D),
-        // زرار الرجوع الافتراضي سيعود خطوة للخلف للقائمة
+        centerTitle: true,
       ),
       body: _isUploading
-          ? const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [CircularProgressIndicator(), SizedBox(height: 10), Text("جاري الرفع والحفظ...")] ))
+          ? const Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              CircularProgressIndicator(color: Color(0xFFB21F2D)),
+              SizedBox(height: 15),
+              Text("جاري رفع المستند وتأمين القيد...", style: TextStyle(fontFamily: 'Cairo'))
+            ]))
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(25),
               child: Form(
                 key: _formKey,
                 child: Column(
                   children: [
-                    // --- قسم الصورة ---
+                    // --- معاينة الصورة ---
                     GestureDetector(
                       onTap: () => _showImageSourceOptions(),
                       child: Container(
-                        height: 180,
+                        height: 200,
                         width: double.infinity,
                         decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(15),
-                          border: Border.all(color: _imageFile == null ? Colors.red : Colors.green, width: 2),
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: _imageFile == null ? Colors.red.shade300 : Colors.green.shade400, width: 2, style: BorderStyle.solid),
                         ),
                         child: _imageFile == null
-                            ? const Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.add_a_photo, size: 50, color: Colors.grey), Text("إرفاق صورة المستند (إجباري)")])
+                            ? const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                                Icon(Icons.cloud_upload_outlined, size: 50, color: Colors.grey),
+                                SizedBox(height: 10),
+                                Text("اضغط لإرفاق صورة المستند (إجباري)", style: TextStyle(fontFamily: 'Cairo', color: Colors.grey))
+                              ])
                             : ClipRRect(
-                                borderRadius: BorderRadius.circular(13),
+                                borderRadius: BorderRadius.circular(18),
                                 child: kIsWeb 
                                   ? Image.network(_imageFile.path, fit: BoxFit.cover) 
                                   : Image.file(File(_imageFile.path), fit: BoxFit.cover),
                               ),
                       ),
                     ),
-                    const SizedBox(height: 25),
+                    const SizedBox(height: 30),
 
                     // حقل المبلغ
                     TextFormField(
                       controller: _amountController,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(labelText: "المبلغ (ج.م)", border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-                      validator: (value) => value!.isEmpty ? "يرجى إدخال المبلغ" : null,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                      decoration: InputDecoration(
+                        labelText: "القيمة المالية (ج.م)",
+                        prefixIcon: const Icon(Icons.monetization_on_outlined),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+                      ),
+                      validator: (value) => value!.isEmpty ? "يرجى إدخال القيمة" : null,
                     ),
                     const SizedBox(height: 20),
 
-                    // حقل البيان (إدخال يدوي)
+                    // حقل البيان اليدوي
                     TextFormField(
                       controller: _detailsController,
-                      maxLines: 2,
-                      decoration: InputDecoration(labelText: "بيان المصروف / التفاصيل", border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-                      validator: (value) => value!.isEmpty ? "يرجى إدخال بيان للمصروف" : null,
+                      maxLines: 3,
+                      decoration: InputDecoration(
+                        labelText: "بيان المصروف (التفاصيل)",
+                        prefixIcon: const Icon(Icons.description_outlined),
+                        alignLabelWithHint: true,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+                      ),
+                      validator: (value) => value!.isEmpty ? "يرجى كتابة وصف للمصروف" : null,
                     ),
                     const SizedBox(height: 20),
 
+                    // تصنيف المصروف
                     DropdownButtonFormField<String>(
                       value: _selectedSource,
-                      decoration: InputDecoration(labelText: "تصنيف المصروف", border: OutlineInputBorder(borderRadius: BorderRadius.circular(12))),
-                      items: _expenseSources.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
+                      decoration: InputDecoration(
+                        labelText: "نوع المصروف",
+                        prefixIcon: const Icon(Icons.category_outlined),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15)),
+                      ),
+                      items: _expenseSources.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontFamily: 'Cairo')))).toList(),
                       onChanged: (val) => setState(() => _selectedSource = val!),
                     ),
                     const SizedBox(height: 20),
 
+                    // التاريخ
                     ListTile(
-                      title: Text("التاريخ: ${DateFormat('yyyy-MM-dd').format(_selectedDate)}"),
-                      trailing: const Icon(Icons.calendar_month),
+                      title: Text("تاريخ العملية: ${DateFormat('yyyy-MM-dd').format(_selectedDate)}", style: const TextStyle(fontFamily: 'Cairo')),
+                      trailing: const Icon(Icons.edit_calendar),
                       onTap: () async {
-                        DateTime? picked = await showDatePicker(context: context, initialDate: _selectedDate, firstDate: DateTime(2025), lastDate: DateTime(2030));
+                        DateTime? picked = await showDatePicker(context: context, initialDate: _selectedDate, firstDate: DateTime(2024), lastDate: DateTime(2030));
                         if (picked != null) setState(() => _selectedDate = picked);
                       },
-                      tileColor: Colors.grey[100],
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      tileColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15), side: BorderSide(color: Colors.grey.shade300)),
                     ),
-                    const SizedBox(height: 30),
+                    const SizedBox(height: 40),
 
+                    // زر الحفظ
                     SizedBox(
                       width: double.infinity,
-                      height: 55,
-                      child: ElevatedButton(
+                      height: 60,
+                      child: ElevatedButton.icon(
                         onPressed: _saveExpense,
-                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFB21F2D)),
-                        child: const Text("حفظ المصروف والمستند", style: TextStyle(color: Colors.white, fontSize: 18, fontFamily: 'Cairo')),
+                        icon: const Icon(Icons.save, color: Colors.white),
+                        label: const Text("تأكيد وحفظ البيانات", style: TextStyle(color: Colors.white, fontSize: 18, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFB21F2D),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                          elevation: 3,
+                        ),
                       ),
                     ),
                   ],
@@ -243,11 +289,17 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
   void _showImageSourceOptions() {
     showModalBottomSheet(
       context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) => SafeArea(
         child: Wrap(
           children: [
-            ListTile(leading: const Icon(Icons.camera_alt), title: const Text("الكاميرا"), onTap: () { Navigator.pop(context); _pickImage(ImageSource.camera); }),
-            ListTile(leading: const Icon(Icons.photo_library), title: const Text("المعرض"), onTap: () { Navigator.pop(context); _pickImage(ImageSource.gallery); }),
+            const Padding(
+              padding: EdgeInsets.all(15.0),
+              child: Text("اختيار مصدر الصورة", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+            ListTile(leading: const Icon(Icons.camera_alt, color: Color(0xFFB21F2D)), title: const Text("التقاط بالكاميرا", style: TextStyle(fontFamily: 'Cairo')), onTap: () { Navigator.pop(context); _pickImage(ImageSource.camera); }),
+            ListTile(leading: const Icon(Icons.photo_library, color: Color(0xFFB21F2D)), title: const Text("من معرض الصور", style: TextStyle(fontFamily: 'Cairo')), onTap: () { Navigator.pop(context); _pickImage(ImageSource.gallery); }),
+            const SizedBox(height: 10),
           ],
         ),
       ),
