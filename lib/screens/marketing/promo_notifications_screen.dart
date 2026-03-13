@@ -101,6 +101,7 @@ class _PromoNotificationsScreenState extends State<PromoNotificationsScreen> {
           'topic': _selectedTopic,
           'title': _titleCtrl.text,
           'message': _msgCtrl.text,
+          'image': _imgUrlCtrl.text,
           'sound': _selectedSound,
           'data': {
             'screen': _targetScreen,
