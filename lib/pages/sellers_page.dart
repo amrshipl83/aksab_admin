@@ -1,7 +1,9 @@
 // lib/pages/sellers_page.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../widgets/seller_review_sheet.dart'; 
+import 'package:http/http.dart' as http; // 👈 إضافة مكتبة http
+import 'dart:convert'; // 👈 للتعامل مع JSON
+import '../widgets/seller_review_sheet.dart';
 import 'seller_details_page.dart';
 
 class SellersPage extends StatefulWidget {
@@ -13,6 +15,9 @@ class SellersPage extends StatefulWidget {
 
 class _SellersPageState extends State<SellersPage> with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  
+  // 🔗 رابط بوابة الـ API الخاص باللمدا (تأكد من تحديث الرابط الفعلي هنا)
+  final String _lambdaEndpoint = "https://h9iaac7jee.execute-api.us-east-1.amazonaws.com/div/updateloction";
 
   @override
   void initState() {
@@ -23,19 +28,55 @@ class _SellersPageState extends State<SellersPage> with SingleTickerProviderStat
   @override
   void dispose() {
     _tabController.dispose();
+    _tabController.dispose();
     super.dispose();
+  }
+
+  // دالة مناداة محرك المزامنة (اللمدا) لتحديث العروض
+  Future<void> _notifyLambdaToSync(String sellerId) async {
+    try {
+      print("🚀 جاري إرسال طلب مزامنة العروض للمحرك السحابي...");
+      final response = await http.post(
+        Uri.parse(_lambdaEndpoint),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'sellerId': sellerId}),
+      );
+
+      if (response.statusCode == 200) {
+        print("✅ تم مزامنة حالة العروض بنجاح عبر AWS Lambda");
+      } else {
+        print("⚠️ فشل المزامنة: كود الاستجابة ${response.statusCode}");
+      }
+    } catch (e) {
+      print("❌ خطأ في الاتصال باللمدا: $e");
+    }
   }
 
   String _getBusinessName(Map<String, dynamic> data) {
     return data['merchantName'] ?? data['supermarketName'] ?? data['fullname'] ?? "تاجر جديد";
   }
 
-  // دالة لتغيير الحالة في قاعدة البيانات
+  // 🎯 الدالة الأساسية المعدلة: تغيير الحالة + مزامنة العروض
   Future<void> _toggleSellerStatus(String id, String currentStatus) async {
     String newStatus = (currentStatus == 'active') ? 'inactive' : 'active';
-    await FirebaseFirestore.instance.collection('sellers').doc(id).update({
-      'status': newStatus,
-    });
+    
+    try {
+      // 1. تحديث الحالة في Firestore (اللوحة الأم)
+      await FirebaseFirestore.instance.collection('sellers').doc(id).update({
+        'status': newStatus,
+      });
+
+      // 2. مناداة اللمدا لتحديث "مجموعة العروض" لضمان عدم ظهور عروض التاجر الموقوف
+      await _notifyLambdaToSync(id);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("تم تحديث حالة التاجر ومزامنة العروض: $newStatus")),
+        );
+      }
+    } catch (e) {
+      print("❌ فشل تحديث الحالة: $e");
+    }
   }
 
   @override
@@ -82,8 +123,7 @@ class _SellersPageState extends State<SellersPage> with SingleTickerProviderStat
             final data = docs[index].data() as Map<String, dynamic>;
             final id = docs[index].id;
             bool isPending = collectionName == "pendingSellers";
-            
-            // قراءة حالة التاجر (نشط أو غير نشط)
+
             String currentStatus = data['status'] ?? 'active';
             bool isActive = currentStatus == 'active';
 
@@ -105,12 +145,10 @@ class _SellersPageState extends State<SellersPage> with SingleTickerProviderStat
                     style: const TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo', fontSize: 14)),
                 subtitle: Text("${data['businessType'] ?? 'نشاط تجاري'} | ${data['phone'] ?? 'بدون هاتف'}",
                     style: const TextStyle(fontSize: 12)),
-                
-                // --- التعديل هنا: إضافة زر التحكم في الحالة للمعتمدين فقط ---
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (!isPending) // يظهر فقط في تبويب المعتمدين
+                    if (!isPending) 
                       Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -122,7 +160,7 @@ class _SellersPageState extends State<SellersPage> with SingleTickerProviderStat
                               onChanged: (value) => _toggleSellerStatus(id, currentStatus),
                             ),
                           ),
-                          Text(isActive ? "نشط" : "متوقف", 
+                          Text(isActive ? "نشط" : "متوقف",
                             style: TextStyle(fontSize: 9, color: isActive ? Colors.green : Colors.red, fontWeight: FontWeight.bold)),
                         ],
                       ),
