@@ -3,21 +3,21 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class DeliveryService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  // 1. جلب الطلبات المعلقة (مراقبة لحظية من الأدمن)
+  // 1. جلب الطلبات المعلقة
   Stream<QuerySnapshot> getPendingRequests() {
     return _db.collection('pendingSupermarkets').snapshots();
   }
 
-  // 2. جلب الماركتات المفعلة (التي تجاوزت مرحلة القبول)
+  // 2. جلب الماركتات المفعلة
   Stream<QuerySnapshot> getActiveSupermarkets() {
     return _db.collection('deliverySupermarkets').snapshots();
   }
 
-  // 3. تحديث حالة السوبر ماركت (نشط / معطل) - إيقاف يدوي للطوارئ
+  // 3. تحديث حالة السوبر ماركت (نشط / معطل)
   Future<void> updateSupermarketStatus(String docId, bool status) async {
     await _db.collection('deliverySupermarkets').doc(docId).update({
       'isActive': status,
-      'isVisibleInStore': status, // ربط الظهور في الستور بالحالة اليدوية أيضاً
+      'isVisibleInStore': status,
       'lastUpdated': FieldValue.serverTimestamp(),
     });
   }
@@ -27,17 +27,16 @@ class DeliveryService {
     await _db.collection('pendingSupermarkets').doc(requestId).delete();
   }
 
-  // 5. عملية الموافقة المطورة (نظام الـ 30 يوم المجانية)
+  // 5. عملية الموافقة المطورة (نظام المدة المتغيرة المختارة)
   Future<void> approveRequest({
     required String requestId,
     required String supermarketName,
     required String address,
     required String ownerId,
     required List<Map<String, dynamic>> products,
-    required Map<String, dynamic> extraData, 
+    required Map<String, dynamic> extraData,
   }) async {
-    
-    // جلب البيانات الأصلية (الإحداثيات، الأيقونة، هاتف المالك)
+    // جلب البيانات الأصلية
     DocumentSnapshot pendingSnap = await _db.collection('pendingSupermarkets').doc(requestId).get();
     Map<String, dynamic> originalData = {};
     if (pendingSnap.exists) {
@@ -45,49 +44,49 @@ class DeliveryService {
     }
 
     WriteBatch batch = _db.batch();
-
-    // إعداد مرجع المستند في مجموعة السوبر ماركتات النشطة
     DocumentReference activeRef = _db.collection('deliverySupermarkets').doc(requestId);
 
-    // --- منطق التوقيت والاشتراك ---
+    // --- منطق التوقيت والاشتراك المتغير ---
     DateTime now = DateTime.now();
-    // إعطاء 30 يوم مجانية تبدأ من لحظة موافقة الأدمن
-    DateTime trialExpiry = now.add(const Duration(days: 30));
+    
+    // قراءة المدة من البيانات المرسلة من اللوحة (الافتراضي 30 يوم إذا لم يرسل)
+    int trialDays = extraData['customTrialDays'] ?? 30;
+    DateTime trialExpiry = now.add(Duration(days: trialDays));
 
     Map<String, dynamic> finalMarketData = {
-      ...originalData,           // البيانات التقنية الأصلية من طلب التسجيل
+      ...originalData,
       'supermarketName': supermarketName,
       'address': address,
       'ownerId': ownerId,
-      'status': 'active',        
-      'isActive': true,          
+      'status': 'active',
+      'isActive': true,
       'approvalDate': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
       
-      // --- حقول نظام الاشتراكات الجديد ---
-      'subscriptionStatus': 'trial',          // الحالة الابتدائية: فترة تجريبية
-      'currentPlan': 'الافتراضية',             // اسم الباقة المجانية
-      'trialExpiryDate': Timestamp.fromDate(trialExpiry), // تاريخ انتهاء الصلاحية
-      'isVisibleInStore': true,               // السماح بالظهور للمستهلك فوراً
-      'isTrialUsed': true,                    // علامة أمان لعدم تكرار الفترة المجانية
+      // --- حقول نظام الاشتراكات المحدثة بقيمة متغيرة ---
+      'subscriptionStatus': 'trial',
+      'currentPlan': 'الافتراضية',
+      'trialExpiryDate': Timestamp.fromDate(trialExpiry),
+      'isVisibleInStore': true,
+      'isTrialUsed': true,
+      'selectedTrialPeriod': trialDays, // توثيق المدة المختارة للرجوع إليها
       
-      ...extraData,              // الرسوم والمواعيد والواتساب من الـ Dialog
+      ...extraData, 
     };
 
     // 1. إضافة الماركت للمجموعة الأساسية
     batch.set(activeRef, finalMarketData);
 
-    // 2. إضافة المنتجات لمجموعة عروض السوق (marketOffer)
+    // 2. إضافة المنتجات لمجموعة عروض السوق
     for (var prod in products) {
-      DocumentReference offerRef =
-          _db.collection('marketOffer').doc("${requestId}_${prod['productId']}");
+      DocumentReference offerRef = _db.collection('marketOffer').doc("${requestId}_${prod['productId']}");
       batch.set(offerRef, {
         'ownerId': requestId,
         'supermarketName': supermarketName,
         'productId': prod['productId'],
         'units': prod['units'],
         'status': 'active',
-        'isVisible': true, // لجعل المنتجات تختفي تلقائياً عند انتهاء الاشتراك
+        'isVisible': true,
         'createdAt': FieldValue.serverTimestamp(),
       });
     }
@@ -95,7 +94,7 @@ class DeliveryService {
     // 3. حذف الطلب من قائمة الانتظار
     batch.delete(_db.collection('pendingSupermarkets').doc(requestId));
 
-    // تنفيذ العملية بالكامل
     await batch.commit();
   }
 }
+

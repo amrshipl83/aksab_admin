@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:convert';
 // ignore: avoid_web_libraries_in_flutter
 import 'dart:js' as js;
-
 import '../services/delivery_service.dart';
 import '../widgets/request_card.dart';
 import '../widgets/add_products_dialog.dart';
@@ -60,7 +59,7 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
         if (snapshot.hasError) return Center(child: Text("خطأ: ${snapshot.error}"));
         if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text("لا توجد طلبات معلقة"));
-        
+
         return ListView.builder(
           padding: const EdgeInsets.symmetric(vertical: 10),
           itemCount: snapshot.data!.docs.length,
@@ -145,7 +144,7 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
               ),
               const SizedBox(width: 10),
               IconButton(
-                icon: const Icon(Icons.file_download, color: Colors.green, size: 30), 
+                icon: const Icon(Icons.file_download, color: Colors.green, size: 30),
                 onPressed: _exportDetailedExcel,
                 tooltip: "تصدير تفصيلي للإكسل",
               ),
@@ -158,7 +157,7 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
             builder: (context, snapshot) {
               if (snapshot.hasError) return Center(child: Text("خطأ: ${snapshot.error}"));
               if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-              
+
               var orders = snapshot.data!.docs.where((doc) {
                 var name = doc['supermarketName']?.toString().toLowerCase() ?? "";
                 return name.contains(_searchQuery.toLowerCase());
@@ -184,9 +183,8 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
                         DataCell(Text("${order['finalAmount'] ?? 0} ج.م")),
                         DataCell(Text(_formatDate(order['orderDate']))),
                         DataCell(IconButton(
-                          icon: const Icon(Icons.remove_red_eye, color: Colors.blue), 
-                          onPressed: () => _showOrderDetails(order)
-                        )),
+                            icon: const Icon(Icons.remove_red_eye, color: Colors.blue),
+                            onPressed: () => _showOrderDetails(order))),
                       ]);
                     }).toList(),
                   ),
@@ -199,13 +197,10 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
     );
   }
 
-  // --- دالة التصدير التفصيلي (مثل كود الموردين) ---
   Future<void> _exportDetailedExcel() async {
     try {
       var excel = Excel.createExcel();
       Sheet sheetObject = excel['Sheet1'];
-
-      // رأس الجدول التفصيلي
       sheetObject.appendRow([
         TextCellValue("التاريخ"),
         TextCellValue("الماركت"),
@@ -218,15 +213,11 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
         TextCellValue("إجمالي الفاتورة"),
         TextCellValue("رسوم التوصيل"),
       ]);
-
       var snapshot = await FirebaseFirestore.instance.collection('consumerorders').get();
-      
       for (var doc in snapshot.docs) {
         var data = doc.data();
         var items = (data['items'] as List?) ?? [];
-        
         if (items.isEmpty) {
-          // إذا لم تكن هناك منتجات، نصدر سطر الطلب فقط
           sheetObject.appendRow([
             TextCellValue(_formatDate(data['orderDate'])),
             TextCellValue(data['supermarketName']?.toString() ?? 'N/A'),
@@ -240,7 +231,6 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
             DoubleCellValue(double.tryParse(data['deliveryFee']?.toString() ?? '0') ?? 0.0),
           ]);
         } else {
-          // لكل منتج في الطلب، ننشئ سطراً مستقلاً
           for (var item in items) {
             sheetObject.appendRow([
               TextCellValue(_formatDate(data['orderDate'])),
@@ -257,7 +247,6 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
           }
         }
       }
-
       var fileBytes = excel.save();
       if (fileBytes != null && kIsWeb) {
         final content = base64Encode(fileBytes);
@@ -272,7 +261,6 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
     }
   }
 
-  // --- دالة تفاصيل الطلب (إصلاح زر العين) ---
   void _showOrderDetails(Map<String, dynamic> order) {
     showDialog(
       context: context,
@@ -289,12 +277,12 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
               const Divider(),
               const Text("المنتجات:", style: TextStyle(fontWeight: FontWeight.bold)),
               ...? (order['items'] as List?)?.map((item) => Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text("- ${item['name'] ?? 'منتج'} x ${item['quantity'] ?? 0} (${item['price'] ?? 0} ج.م)"),
-              )),
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text("- ${item['name'] ?? 'منتج'} x ${item['quantity'] ?? 0} (${item['price'] ?? 0} ج.م)"),
+                  )),
               const Divider(),
-              Text("الإجمالي: ${order['finalAmount'] ?? 0} ج.م", 
-                style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+              Text("الإجمالي: ${order['finalAmount'] ?? 0} ج.م",
+                  style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
             ],
           ),
         ),
@@ -303,30 +291,74 @@ class _DeliveryManagementScreenState extends State<DeliveryManagementScreen> {
     );
   }
 
-  // --- باقي الدوال المساعدة ---
   void _openApprovalDialog(SupermarketModel request) {
+    int selectedDays = 30; // القيمة الافتراضية داخل الديالوج
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AddProductsDialog(
         request: request,
         onConfirm: (products, extraData) async {
-          Navigator.pop(context);
-          _showLoading();
-          try {
-            await _service.approveRequest(
-              requestId: request.id,
-              supermarketName: request.name,
-              address: request.address,
-              ownerId: request.ownerId ?? request.id,
-              products: products,
-              extraData: extraData,
-            );
-            _hideLoading();
-            _showSnackBar("تم تفعيل الماركت بنجاح", Colors.green);
-          } catch (e) {
-            _hideLoading();
-            _showSnackBar("خطأ: $e", Colors.red);
+          // نافذة اختيار مدة الباقة قبل التنفيذ النهائي
+          final int? finalDays = await showDialog<int>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text("تأمين استمرارية الخدمة", style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
+              content: StatefulBuilder(
+                builder: (context, setInternalState) {
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text("اختر مدة الفترة التجريبية للماركت:"),
+                      const SizedBox(height: 20),
+                      DropdownButton<int>(
+                        value: selectedDays,
+                        isExpanded: true,
+                        items: [15, 30, 45, 60].map((int val) {
+                          return DropdownMenuItem<int>(
+                            value: val,
+                            child: Text("$val يوم"),
+                          );
+                        }).toList(),
+                        onChanged: (newVal) {
+                          if (newVal != null) {
+                            setInternalState(() => selectedDays = newVal);
+                          }
+                        },
+                      ),
+                    ],
+                  );
+                },
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("إلغاء")),
+                ElevatedButton(onPressed: () => Navigator.pop(ctx, selectedDays), child: const Text("تفعيل الآن")),
+              ],
+            ),
+          );
+
+          if (finalDays != null) {
+            Navigator.pop(context);
+            _showLoading();
+            try {
+              await _service.approveRequest(
+                requestId: request.id,
+                supermarketName: request.name,
+                address: request.address,
+                ownerId: request.ownerId ?? request.id,
+                products: products,
+                extraData: {
+                  ...extraData,
+                  'customTrialDays': finalDays, // تمرير القيمة المتغيرة
+                },
+              );
+              _hideLoading();
+              _showSnackBar("تم تفعيل الماركت بنجاح لمدة $finalDays يوم", Colors.green);
+            } catch (e) {
+              _hideLoading();
+              _showSnackBar("خطأ: $e", Colors.red);
+            }
           }
         },
       ),
