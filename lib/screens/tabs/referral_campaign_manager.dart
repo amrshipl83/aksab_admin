@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:sizer/sizer.dart';
 
 class ReferralCampaignsScreen extends StatefulWidget {
   const ReferralCampaignsScreen({super.key});
@@ -15,11 +14,10 @@ class _ReferralCampaignsScreenState extends State<ReferralCampaignsScreen> {
   final TextEditingController _orderNumController = TextEditingController();
   final TextEditingController _rewardController = TextEditingController();
   
-  // خريطة لتخزين الأهداف (Milestones) - تبدأ بقيم افتراضية قابلة للتعديل
+  // خريطة لتخزين الأهداف (Milestones)
   Map<int, double> _milestones = {1: 20.0, 3: 50.0, 5: 100.0};
   bool _isPublishing = false;
 
-  // دالة لإضافة Milestone جديد للقائمة قبل الحفظ
   void _addMilestone() {
     if (_orderNumController.text.isNotEmpty && _rewardController.text.isNotEmpty) {
       setState(() {
@@ -45,7 +43,6 @@ class _ReferralCampaignsScreenState extends State<ReferralCampaignsScreen> {
         formattedMilestones['order_$key'] = value;
       });
 
-      // 1. تخزين تفاصيل الحملة
       await FirebaseFirestore.instance.collection('referralCampaigns').doc(campaignId).set({
         'campaignName': _nameController.text.trim(),
         'milestones': formattedMilestones,
@@ -53,7 +50,6 @@ class _ReferralCampaignsScreenState extends State<ReferralCampaignsScreen> {
         'isActive': true,
       });
 
-      // 2. تعيينها كحملة نشطة في الإعدادات العامة
       await FirebaseFirestore.instance.collection('appSettings').doc('referralConfig').set({
         'activeCampaignId': campaignId,
         'lastUpdated': FieldValue.serverTimestamp(),
@@ -83,35 +79,34 @@ class _ReferralCampaignsScreenState extends State<ReferralCampaignsScreen> {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // --- قسم: الحملة النشطة حالياً (القراءة من Firestore) ---
-            _buildActiveCampaignStatus(),
-            
-            const SizedBox(height: 30),
-            const Divider(),
-            const SizedBox(height: 20),
-            
-            // --- قسم: إنشاء حملة جديدة ---
-            Text("إنشاء حملة مكافآت جديدة 🚀", style: TextStyle(fontFamily: 'Cairo', fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orange[900])),
-            const SizedBox(height: 20),
-            
-            _buildInputCard(),
-            
-            const SizedBox(height: 30),
-            _isPublishing 
-              ? const Center(child: CircularProgressIndicator())
-              : ElevatedButton(
-                  onPressed: _createNewCampaign,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.black87,
-                    minimumSize: const Size(double.infinity, 60),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                  ),
-                  child: const Text("حفظ ونشر الحملة كـ (نشطة الآن)", style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 16)),
-                ),
-          ],
+        child: Center(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 800), // تحديد عرض أقصى للويب ليكون التصميم مريحاً
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildActiveCampaignStatus(),
+                const SizedBox(height: 30),
+                const Divider(),
+                const SizedBox(height: 20),
+                Text("إنشاء حملة مكافآت جديدة 🚀", style: TextStyle(fontFamily: 'Cairo', fontSize: 22, fontWeight: FontWeight.bold, color: Colors.orange[900])),
+                const SizedBox(height: 20),
+                _buildInputCard(),
+                const SizedBox(height: 30),
+                _isPublishing 
+                  ? const Center(child: CircularProgressIndicator())
+                  : ElevatedButton(
+                      onPressed: _createNewCampaign,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.black87,
+                        minimumSize: const Size(double.infinity, 60),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                      ),
+                      child: const Text("حفظ ونشر الحملة كـ (نشطة الآن)", style: TextStyle(fontFamily: 'Cairo', color: Colors.white, fontSize: 16)),
+                    ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -119,22 +114,22 @@ class _ReferralCampaignsScreenState extends State<ReferralCampaignsScreen> {
 
   Widget _buildActiveCampaignStatus() {
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseSnapshotHelper.getActiveConfig(),
+      stream: FirebaseFirestore.instance.collection('appSettings').doc('referralConfig').snapshots(),
       builder: (context, configSnap) {
         if (!configSnap.hasData) return const LinearProgressIndicator();
-        String activeId = configSnap.data!.exists ? configSnap.data!.get('activeCampaignId') : "لا توجد حملة";
+        String activeId = configSnap.data!.exists ? (configSnap.data!.get('activeCampaignId') ?? "لا توجد") : "لا توجد";
 
         return StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance.collection('referralCampaigns').doc(activeId).snapshots(),
           builder: (context, campSnap) {
             if (!campSnap.hasData || !campSnap.data!.exists) {
-              return _statusCard("الحملة الحالية", "لا توجد حملة نشطة حالياً", Colors.red);
+              return _statusCard("الحملة الحالية", "لا توجد حملة نشطة حالياً (معرف: $activeId)", Colors.red);
             }
             
             var data = campSnap.data!.data() as Map<String, dynamic>;
             return _statusCard(
               "الحملة النشطة: ${data['campaignName']}",
-              "المعرف: $activeId | الأهداف: ${data['milestones'].length}",
+              "المعرف: $activeId | الأهداف: ${(data['milestones'] as Map).length}",
               Colors.green[700]!,
               isLive: true
             );
@@ -151,18 +146,21 @@ class _ReferralCampaignsScreenState extends State<ReferralCampaignsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
         border: Border.all(color: color.withOpacity(0.5), width: 2),
       ),
       child: Row(
         children: [
           Icon(isLive ? Icons.sensors : Icons.sensors_off, color: color, size: 40),
           const SizedBox(width: 20),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 18, color: color)),
-              Text(sub, style: const TextStyle(fontFamily: 'Cairo', color: Colors.grey)),
-            ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 18, color: color)),
+                Text(sub, style: const TextStyle(fontFamily: 'Cairo', color: Colors.grey)),
+              ],
+            ),
           ),
         ],
       ),
@@ -172,14 +170,13 @@ class _ReferralCampaignsScreenState extends State<ReferralCampaignsScreen> {
   Widget _buildInputCard() {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)]),
       child: Column(
         children: [
           TextField(controller: _idController, decoration: const InputDecoration(labelText: "معرف الحملة (مثال: spring_2026)", border: OutlineInputBorder())),
           const SizedBox(height: 15),
           TextField(controller: _nameController, decoration: const InputDecoration(labelText: "اسم الحملة الظاهر للمناديب", border: OutlineInputBorder())),
           const SizedBox(height: 25),
-          
           const Text("إضافة أهداف المكافأة (Milestones)", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           Row(
@@ -191,12 +188,13 @@ class _ReferralCampaignsScreenState extends State<ReferralCampaignsScreen> {
               IconButton(onPressed: _addMilestone, icon: const Icon(Icons.add_circle, color: Colors.green, size: 35)),
             ],
           ),
-          
           const SizedBox(height: 20),
           Wrap(
             spacing: 10,
+            runSpacing: 10,
             children: _milestones.entries.map((e) => Chip(
-              label: Text("أوردر ${e.key} ⬅️ ${e.value} ج.م"),
+              backgroundColor: Colors.orange[50],
+              label: Text("أوردر ${e.key} ⬅️ ${e.value} ج.م", style: const TextStyle(fontFamily: 'Cairo')),
               onDeleted: () => setState(() => _milestones.remove(e.key)),
               deleteIconColor: Colors.red,
             )).toList(),
@@ -204,13 +202,6 @@ class _ReferralCampaignsScreenState extends State<ReferralCampaignsScreen> {
         ],
       ),
     );
-  }
-}
-
-// كلاس مساعد للتعامل مع الـ Stream بشكل أنظف
-class FirebaseSnapshotHelper {
-  static Stream<DocumentSnapshot> getActiveConfig() {
-    return FirebaseFirestore.instance.collection('appSettings').doc('referralConfig').snapshots();
   }
 }
 
