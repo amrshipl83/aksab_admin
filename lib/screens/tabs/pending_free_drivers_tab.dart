@@ -1,33 +1,64 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:math'; // لتوليد كود الإحالة
+import 'referral_campaign_manager.dart'; // استيراد الصفحة الجديدة
 
 class PendingFreeDriversTab extends StatelessWidget {
   const PendingFreeDriversTab({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('pendingFreeDrivers').snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) return const Center(child: Text("حدث خطأ في جلب البيانات"));
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text("لا توجد طلبات انتظار حالياً", style: TextStyle(fontFamily: 'Cairo')));
-        }
+    return Column(
+      children: [
+        // زرار إدارة برنامج الإحالة - بارز في بداية الصفحة
+        Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: ElevatedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => ReferralCampaignsScreen()),
+              );
+            },
+            icon: const Icon(Icons.campaign_rounded, color: Colors.white),
+            label: const Text(
+              "إدارة برنامج الإحالة (المكافآت)",
+              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange[800],
+              minimumSize: const Size(double.infinity, 55),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              elevation: 4,
+            ),
+          ),
+        ),
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(12),
-          itemCount: snapshot.data!.docs.length,
-          itemBuilder: (context, index) {
-            var doc = snapshot.data!.docs[index];
-            var data = doc.data() as Map<String, dynamic>;
-            return _buildDriverRequestCard(context, doc.id, data);
-          },
-        );
-      },
+        Expanded(
+          child: StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance.collection('pendingFreeDrivers').snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) return const Center(child: Text("حدث خطأ في جلب البيانات"));
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.data!.docs.isEmpty) {
+                return const Center(child: Text("لا توجد طلبات انتظار حالياً", style: TextStyle(fontFamily: 'Cairo')));
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.all(12),
+                itemCount: snapshot.data!.docs.length,
+                itemBuilder: (context, index) {
+                  var doc = snapshot.data!.docs[index];
+                  var data = doc.data() as Map<String, dynamic>;
+                  return _buildDriverRequestCard(context, doc.id, data);
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -45,10 +76,8 @@ class PendingFreeDriversTab extends StatelessWidget {
           backgroundColor: Color(0xFF43B97F),
           child: Icon(Icons.motorcycle, color: Colors.white),
         ),
-        title: Text(data['fullname'] ?? 'بدون اسم',
-            style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-        subtitle: Text("مركبة: $vehicleName | هاتف: ${data['phone']}",
-            style: const TextStyle(fontFamily: 'Cairo', fontSize: 12)),
+        title: Text(data['fullname'] ?? 'بدون اسم', style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+        subtitle: Text("مركبة: $vehicleName | هاتف: ${data['phone']}", style: const TextStyle(fontFamily: 'Cairo', fontSize: 12)),
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
@@ -60,6 +89,10 @@ class PendingFreeDriversTab extends StatelessWidget {
                 // عرض كود الإحالة الذي استخدمه المندوب عند التسجيل (إن وجد)
                 if (data['referredBy'] != null && data['referredBy'].toString().isNotEmpty)
                   _infoRow(Icons.card_giftcard, "بواسطة كود: ${data['referredBy']}"),
+                
+                // عرض الحملة المربوط بها المندوب للتأكد قبل التفعيل
+                _infoRow(Icons.track_changes, "الحملة المسجلة: ${data['appliedCampaignId'] ?? 'افتراضية'}"),
+
                 const Divider(height: 30),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -123,8 +156,7 @@ class PendingFreeDriversTab extends StatelessWidget {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("حدد حد المديونية المسموح به لهذا المندوب:",
-              textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Cairo', fontSize: 14)),
+            const Text("حدد حد المديونية المسموح به لهذا المندوب:", textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Cairo', fontSize: 14)),
             const SizedBox(height: 20),
             TextField(
               controller: limitController,
@@ -153,28 +185,27 @@ class PendingFreeDriversTab extends StatelessWidget {
 
     if (confirm == true) {
       double finalLimit = double.tryParse(limitController.text) ?? 50.0;
-      // توليد الكود الخاص بالمندوب الجديد
       String newReferralCode = _generateReferralCode(data['fullname'] ?? "DRV");
 
       try {
         await FirebaseFirestore.instance.collection('freeDrivers').doc(uid).set({
           ...data,
           'status': "approved",
-          'walletBalance': 0.0, // الحفاظ على الاسم القديم
-          'creditLimit': finalLimit, // الحفاظ على الاسم القديم
-          'myReferralCode': newReferralCode, // تحديث الحقل الجديد
-          'totalReferralsCount': 0, // تصفير عداد الإحالات
+          'walletBalance': 0.0,
+          'creditLimit': finalLimit,
+          'myReferralCode': newReferralCode,
+          'totalReferralsCount': 0,
           'approvedAt': FieldValue.serverTimestamp(),
           'totalOrders': 0,
           'isOnline': false,
+          'rewardMilestonesReached': [], // تهيئة مصفوفة المكافآت المستلمة
+          // الحقل 'appliedCampaignId' منقول تلقائياً عبر ...data
         });
 
         await FirebaseFirestore.instance.collection('pendingFreeDrivers').doc(uid).delete();
 
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("تم تفعيل ${data['fullname']} كود: $newReferralCode ✅"), backgroundColor: Colors.green)
-          );
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("تم تفعيل ${data['fullname']} كود: $newReferralCode ✅"), backgroundColor: Colors.green));
         }
       } catch (e) {
         if (context.mounted) {
