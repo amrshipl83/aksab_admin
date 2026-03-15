@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:math'; // لتوليد كود الإحالة
 
 class PendingFreeDriversTab extends StatelessWidget {
   const PendingFreeDriversTab({super.key});
@@ -56,6 +57,9 @@ class PendingFreeDriversTab extends StatelessWidget {
               children: [
                 _infoRow(Icons.location_on, "العنوان: ${data['address']}"),
                 _infoRow(Icons.email, "الإيميل: ${data['email']}"),
+                // عرض كود الإحالة الذي استخدمه المندوب عند التسجيل (إن وجد)
+                if (data['referredBy'] != null && data['referredBy'].toString().isNotEmpty)
+                  _infoRow(Icons.card_giftcard, "بواسطة كود: ${data['referredBy']}"),
                 const Divider(height: 30),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -96,7 +100,13 @@ class PendingFreeDriversTab extends StatelessWidget {
     );
   }
 
-  // منطق الرفض
+  // توليد كود إحالة عشوائي
+  String _generateReferralCode(String name) {
+    String prefix = name.length >= 3 ? name.substring(0, 3).toUpperCase() : "AKS";
+    int randomNum = Random().nextInt(9000) + 1000;
+    return "$prefix$randomNum";
+  }
+
   void _rejectDriver(BuildContext context, String uid) async {
     bool? confirm = await _showDialog(context, "حذف الطلب نهائياً؟");
     if (confirm == true) {
@@ -104,11 +114,8 @@ class PendingFreeDriversTab extends StatelessWidget {
     }
   }
 
-  // منطق القبول المحدث (بدون ثوابت صلبة)
   void _approveDriver(BuildContext context, String uid, Map<String, dynamic> data) async {
-    // كونتولر للتحكم في القيمة يدوياً من قبل الأدمن
     final TextEditingController limitController = TextEditingController(text: "50");
-
     bool? confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -116,7 +123,7 @@ class PendingFreeDriversTab extends StatelessWidget {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("حدد حد المديونية المسموح به لهذا المندوب:", 
+            const Text("حدد حد المديونية المسموح به لهذا المندوب:",
               textAlign: TextAlign.center, style: TextStyle(fontFamily: 'Cairo', fontSize: 14)),
             const SizedBox(height: 20),
             TextField(
@@ -146,24 +153,27 @@ class PendingFreeDriversTab extends StatelessWidget {
 
     if (confirm == true) {
       double finalLimit = double.tryParse(limitController.text) ?? 50.0;
+      // توليد الكود الخاص بالمندوب الجديد
+      String newReferralCode = _generateReferralCode(data['fullname'] ?? "DRV");
 
       try {
         await FirebaseFirestore.instance.collection('freeDrivers').doc(uid).set({
           ...data,
           'status': "approved",
-          'walletBalance': 0.0,      // تهيئة المحفظة بصفر كاش فعلي
-          'creditLimit': finalLimit, // القيمة الديناميكية التي أدخلها الأدمن
+          'walletBalance': 0.0, // الحفاظ على الاسم القديم
+          'creditLimit': finalLimit, // الحفاظ على الاسم القديم
+          'myReferralCode': newReferralCode, // تحديث الحقل الجديد
+          'totalReferralsCount': 0, // تصفير عداد الإحالات
           'approvedAt': FieldValue.serverTimestamp(),
           'totalOrders': 0,
           'isOnline': false,
         });
 
-        // حذف من قائمة الانتظار بعد النقل بنجاح
         await FirebaseFirestore.instance.collection('pendingFreeDrivers').doc(uid).delete();
 
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("تم تفعيل ${data['fullname']} بحد $finalLimit ج.م ✅"), backgroundColor: Colors.green)
+            SnackBar(content: Text("تم تفعيل ${data['fullname']} كود: $newReferralCode ✅"), backgroundColor: Colors.green)
           );
         }
       } catch (e) {
