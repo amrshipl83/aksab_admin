@@ -14,7 +14,7 @@ class ActiveFreeDriversTab extends StatelessWidget {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const FleetReferralMasterPage()),
+            MaterialPageRoute(builder: (context) =>  FleetReferralMasterPage()),
           );
         },
         backgroundColor: const Color(0xFF1A2C3D),
