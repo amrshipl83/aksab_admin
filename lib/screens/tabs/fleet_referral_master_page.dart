@@ -2,22 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:data_table_2/data_table_2.dart'; // مكتبة جداول احترافية للويب
 
-class ReferralTrackingPage extends StatefulWidget {
-  const ReferralTrackingPage({super.key});
+// ✅ تم تعديل الاسم ليتطابق مع الاستدعاء في صفحة الـ Tab
+class FleetReferralMasterPage extends StatefulWidget {
+  const FleetReferralMasterPage({super.key});
 
   @override
-  State<ReferralTrackingPage> createState() => _ReferralTrackingPageState();
+  State<FleetReferralMasterPage> createState() => _FleetReferralMasterPageState();
 }
 
-class _ReferralTrackingPageState extends State<ReferralTrackingPage> {
+class _FleetReferralMasterPageState extends State<FleetReferralMasterPage> {
   String searchCode = "";
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('إدارة عهدة الإحالات - أسواق أكسب', style: TextStyle(fontFamily: 'Tajawal')),
+        title: const Text('إدارة عهدة الإحالات - أسواق أكسب',
+            style: TextStyle(fontFamily: 'Tajawal', fontWeight: FontWeight.bold)),
         backgroundColor: Colors.orange[800],
+        centerTitle: true,
       ),
       body: Column(
         children: [
@@ -32,7 +35,10 @@ class _ReferralTrackingPageState extends State<ReferralTrackingPage> {
   // 1. بطاقات الملخص (إجمالي عهدة المكافآت)
   Widget _buildSummaryCards() {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('insuranceLogs').where('type', isEqualTo: 'referral_bonus_credit').snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection('insuranceLogs')
+          .where('type', isEqualTo: 'referral_bonus_credit')
+          .snapshots(),
       builder: (context, snapshot) {
         double totalDistributed = 0;
         if (snapshot.hasData) {
@@ -44,8 +50,11 @@ class _ReferralTrackingPageState extends State<ReferralTrackingPage> {
           padding: const EdgeInsets.all(16.0),
           child: Row(
             children: [
-              _summaryCard("إجمالي نقاط الأمان الموزعة", totalDistributed.toString(), Colors.blue),
-              _summaryCard("إجمالي العمليات اليوم", snapshot.hasData ? snapshot.data!.docs.length.toString() : "0", Colors.green),
+              _summaryCard("إجمالي نقاط الأمان الموزعة", totalDistributed.toStringAsFixed(0), Colors.blue),
+              const SizedBox(width: 12),
+              _summaryCard("عمليات العهدة اليوم", 
+                  snapshot.hasData ? snapshot.data!.docs.length.toString() : "0", 
+                  Colors.green),
             ],
           ),
         );
@@ -57,13 +66,14 @@ class _ReferralTrackingPageState extends State<ReferralTrackingPage> {
     return Expanded(
       child: Card(
         elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: Padding(
           padding: const EdgeInsets.all(20.0),
           child: Column(
             children: [
-              Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
               const SizedBox(height: 10),
-              Text(value, style: TextStyle(fontSize: 24, color: color, fontWeight: FontWeight.bold)),
+              Text(value, style: TextStyle(fontSize: 22, color: color, fontWeight: FontWeight.bold)),
             ],
           ),
         ),
@@ -76,10 +86,11 @@ class _ReferralTrackingPageState extends State<ReferralTrackingPage> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
       child: TextField(
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           labelText: 'ابحث بكود الداعي (مثلاً: AKS1041)',
-          prefixIcon: Icon(Icons.search),
-          border: OutlineInputBorder(),
+          labelStyle: const TextStyle(fontFamily: 'Cairo', fontSize: 13),
+          prefixIcon: const Icon(Icons.search),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         ),
         onChanged: (value) => setState(() => searchCode = value),
       ),
@@ -89,8 +100,8 @@ class _ReferralTrackingPageState extends State<ReferralTrackingPage> {
   // 3. الجدول الرئيسي (ربط البيانات)
   Widget _buildDriversTable() {
     return StreamBuilder<QuerySnapshot>(
-      // بنجيب المناديب اللي ليهم عداد إحالات أو تم دعوتهم
-      stream: FirebaseFirestore.instance.collection('freeDrivers')
+      stream: FirebaseFirestore.instance
+          .collection('freeDrivers')
           .where('totalReferralsCount', isGreaterThan: 0)
           .snapshots(),
       builder: (context, snapshot) {
@@ -107,13 +118,14 @@ class _ReferralTrackingPageState extends State<ReferralTrackingPage> {
             columnSpacing: 12,
             horizontalMargin: 12,
             minWidth: 800,
+            headingRowColor: WidgetStateProperty.all(Colors.grey[200]),
             columns: const [
-              DataColumn2(label: Text('المندوب المحال'), size: ColumnSize.L),
-              DataColumn(label: Text('الداعي (كود)')),
-              DataColumn(label: Text('الحملة')),
-              DataColumn(label: Text('الأوردرات')),
-              DataColumn(label: Text('الأهداف المحققة')),
-              DataColumn(label: Text('حد الائتمان')),
+              DataColumn2(label: Text('المندوب المحال', style: TextStyle(fontFamily: 'Cairo')), size: ColumnSize.L),
+              DataColumn(label: Text('الداعي (كود)', style: TextStyle(fontFamily: 'Cairo'))),
+              DataColumn(label: Text('الحملة', style: TextStyle(fontFamily: 'Cairo'))),
+              DataColumn(label: Text('الأوردرات', style: TextStyle(fontFamily: 'Cairo'))),
+              DataColumn(label: Text('الأهداف', style: TextStyle(fontFamily: 'Cairo'))),
+              DataColumn(label: Text('حد الائتمان', style: TextStyle(fontFamily: 'Cairo'))),
             ],
             rows: drivers.map((driver) {
               return DataRow(cells: [
