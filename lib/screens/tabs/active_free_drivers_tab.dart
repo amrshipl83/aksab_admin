@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'fleet_referral_master_page.dart'; // استيراد الصفحة الجديدة
+// ✅ تم الإبقاء على الاستيراد الكامل للمشروع فقط لضمان دقة المسار في الـ Build
 import 'package:aksab_admin/screens/tabs/fleet_referral_master_page.dart';
-
 
 class ActiveFreeDriversTab extends StatelessWidget {
   const ActiveFreeDriversTab({super.key});
@@ -16,7 +15,8 @@ class ActiveFreeDriversTab extends StatelessWidget {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) =>  FleetReferralMasterPage()),
+            // ✅ تم التأكد من إزالة كلمة const هنا لأن الصفحة تحتوي على عناصر ديناميكية
+            MaterialPageRoute(builder: (context) => FleetReferralMasterPage()),
           );
         },
         backgroundColor: const Color(0xFF1A2C3D),
@@ -56,14 +56,13 @@ class ActiveFreeDriversTab extends StatelessWidget {
     );
   }
 
+  // ... باقي الدوال (Card, InfoRow, Edit, Toggle) تظل كما هي دون تغيير
   Widget _buildDriverCard(BuildContext context, String uid, Map<String, dynamic> data) {
-    // تنسيق عرض الرصيد
     double balance = (data['walletBalance'] ?? 0).toDouble();
     String vehicle = data['vehicleConfig'] == 'motorcycleConfig'
         ? "موتوسيكل"
         : (data['vehicleConfig'] == 'pickupConfig' ? "بيك أب" : "جامبو");
     bool isOnline = data['isOnline'] ?? false;
-    // استخراج كود الإحالة
     String myCode = data['myReferralCode'] ?? "بدون كود";
 
     return Card(
@@ -94,7 +93,7 @@ class ActiveFreeDriversTab extends StatelessWidget {
             child: Column(
               children: [
                 _buildInfoRow(Icons.phone, "رقم الهاتف", data['phone'] ?? ''),
-                _buildInfoRow(Icons.qr_code, "كود الإحالة الخاص به", myCode), // إضافة الكود هنا
+                _buildInfoRow(Icons.qr_code, "كود الإحالة الخاص به", myCode),
                 _buildInfoRow(Icons.email, "البريد الذكي", data['email'] ?? ''),
                 _buildInfoRow(Icons.location_on, "العنوان", data['address'] ?? ''),
                 _buildInfoRow(Icons.credit_card, "حد الائتمان الحالي",
@@ -103,7 +102,6 @@ class ActiveFreeDriversTab extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    // زر تعديل الائتمان
                     ElevatedButton.icon(
                       onPressed: () => _editCreditLimit(context, uid, data['creditLimit']),
                       icon: const Icon(Icons.edit_road, size: 18),
@@ -111,7 +109,6 @@ class ActiveFreeDriversTab extends StatelessWidget {
                       style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.blue.shade800, foregroundColor: Colors.white),
                     ),
-                    // زر إيقاف/تفعيل الحساب
                     ElevatedButton.icon(
                       onPressed: () => _toggleAccountStatus(context, uid, data['status']),
                       icon: Icon(data['status'] == 'approved' ? Icons.block : Icons.check_circle,
@@ -152,7 +149,6 @@ class ActiveFreeDriversTab extends StatelessWidget {
     );
   }
 
-  // دالة تعديل حد الائتمان (الأصلية)
   void _editCreditLimit(BuildContext context, String uid, dynamic currentLimit) {
     final controller = TextEditingController(text: currentLimit?.toString() ?? "");
     showDialog(
@@ -186,7 +182,6 @@ class ActiveFreeDriversTab extends StatelessWidget {
     );
   }
 
-  // دالة إيقاف أو تفعيل الحساب (الأصلية)
   void _toggleAccountStatus(BuildContext context, String uid, String currentStatus) async {
     String newStatus = (currentStatus == 'approved') ? 'suspended' : 'approved';
     String msg = (newStatus == 'suspended')
@@ -213,4 +208,3 @@ class ActiveFreeDriversTab extends StatelessWidget {
     }
   }
 }
-
