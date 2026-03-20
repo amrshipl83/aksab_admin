@@ -40909,7 +40909,7 @@ $S:3}
 A.b9L.prototype={
 $1(a){var s=A.h1().b
 s=s==null?null:s.canvasKitBaseUrl
-return(s==null?"https://www.gstatic.com/flutter-canvaskit/e4b8dca3f1b4ede4c30371002441c88c12187ed6/":s)+a},
+return(s==null?"https://www.gstatic.com/flutter-canvaskit/052f31d115eceda8cbff1b3481fcde4330c4ae12/":s)+a},
 $S:71}
 A.a1Z.prototype={
 gv(a){var s=this.a
@@ -61269,7 +61269,7 @@ b=A.bcW(s)
 b.setAttribute("download","inventory_report_"+A.lh(a0,null).eJ(new A.cc(Date.now(),0,!1))+".csv")
 b.click();(self.URL||self.webkitURL).revokeObjectURL(s)
 this.c.X(t.I).f.bF(B.S7)},
-H(a){var s,r=this.d.ad("vendor_inventories").bd("vdrX1zA28GWgVjX3ogEQ8zJOeYP2")
+H(a){var s,r=this.d.ad("vendor_inventories").bd("4KflsGbA1vRWeuZOU18yo35T3nw2")
 if(B.p.n("items","//"))A.W(A.bz('A collection path must not contain "//".',null))
 else if((A.r4("items").a.length&1)!==1)A.W(A.bz(u.W,null))
 s=r.a
@@ -61376,7 +61376,7 @@ d=m.y
 c=A.Z(d).i("a_<1,al<h,@>>")
 d=A.L(new A.a_(d,new A.b3a(),c),c.i("a9.E"))
 c=$.hS().eC()
-l=A.a6(["invoiceNumber",f,"purchaseDate",g,"supplierName",i,"totalAmount",e,"products",d,"timestamp",new A.e5(c,c),"isProcessed",!1,"vendorId","vdrX1zA28GWgVjX3ogEQ8zJOeYP2"],h,t.X)
+l=A.a6(["invoiceNumber",f,"purchaseDate",g,"supplierName",i,"totalAmount",e,"products",d,"timestamp",new A.e5(c,c),"isProcessed",!1,"vendorId","4KflsGbA1vRWeuZOU18yo35T3nw2"],h,t.X)
 s=8
 return A.r(j.ad("purchases").B(0,l),$async$Bi)
 case 8:j=m.c
@@ -61621,7 +61621,7 @@ o=A.bcW(s)
 o.setAttribute("download","\u062a\u0642\u0631\u064a\u0631_\u0631\u0635\u064a\u062f_\u0627\u0644\u0639\u0631\u0648\u0636_"+A.lh("yyyy-MM-dd",null).eJ(new A.cc(Date.now(),0,!1))+".csv")
 o.click();(self.URL||self.webkitURL).revokeObjectURL(s)
 this.c.X(t.I).f.bF(B.S7)},
-H(a){return new A.an(B.X,A.az(A.b([B.Yl,B.ct,A.cz(new A.b6n(this),this.d.ad("productOffers").fQ(0,"sellerId","vdrX1zA28GWgVjX3ogEQ8zJOeYP2").bX(),t.l)],t.p),B.aF,B.F,B.G),null)}}
+H(a){return new A.an(B.X,A.az(A.b([B.Yl,B.ct,A.cz(new A.b6n(this),this.d.ad("productOffers").fQ(0,"sellerId","4KflsGbA1vRWeuZOU18yo35T3nw2").bX(),t.l)],t.p),B.aF,B.F,B.G),null)}}
 A.b6n.prototype={
 $2(a,b){var s,r,q,p,o,n,m,l,k,j,i,h,g,f=null,e=A.b([],t.H7),d=b.b
 if(d!=null)for(d=d.gaI(),s=d.length,r=t.N,q=t.z,p=t.P,o=t.kc,n=0;n<d.length;d.length===s||(0,A.C)(d),++n){m=d[n].bQ(0)
