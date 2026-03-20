@@ -11,7 +11,7 @@ class PurchaseInvoiceScreen extends StatefulWidget {
 
 class _PurchaseInvoiceScreenState extends State<PurchaseInvoiceScreen> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final String superAdminId = "vdrX1zA28GWgVjX3ogEQ8zJOeYP2";
+  final String superAdminId = "4KflsGbA1vRWeuZOU18yo35T3nw2";
 
   // تحكم عام
   final TextEditingController _supplierController = TextEditingController();

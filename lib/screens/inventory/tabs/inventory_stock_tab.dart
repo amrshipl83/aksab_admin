@@ -13,7 +13,7 @@ class InventoryStockTab extends StatefulWidget {
 
 class _InventoryStockTabState extends State<InventoryStockTab> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
-  final String superAdminId = "vdrX1zA28GWgVjX3ogEQ8zJOeYP2";
+  final String superAdminId = "4KflsGbA1vRWeuZOU18yo35T3nw2";
 
   /// دالة تصدير البيانات إلى ملف CSV متوافق مع Excel
   void _exportToCSV(List<QueryDocumentSnapshot> docs) {

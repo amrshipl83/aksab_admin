@@ -14,7 +14,7 @@ class StoreOffersTab extends StatefulWidget {
 class _StoreOffersTabState extends State<StoreOffersTab> {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   // المعرف الثابت المستخدم في كود الـ HTML الخاص بك
-  final String superAdminId = "vdrX1zA28GWgVjX3ogEQ8zJOeYP2";
+  final String superAdminId = "4KflsGbA1vRWeuZOU18yo35T3nw2";
 
   /// دالة التصدير إلى Excel (CSV) بنفس منطق الـ JavaScript
   void _exportToCSV(List<Map<String, dynamic>> flatData) {
