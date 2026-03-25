@@ -5,9 +5,6 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:excel/excel.dart' as excel_lib;
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
-// الاستيراد المشروط عشان الـ Build ينجح
-import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart' if (dart.library.html) 'package:aksab_admin/widgets/barcode_stub.dart'; 
 import '../pages/products_report_page.dart';
 
 class ProductTab extends StatefulWidget {
@@ -22,8 +19,8 @@ class _ProductTabState extends State<ProductTab> {
   final _descController = TextEditingController();
   final _orderController = TextEditingController();
   final _unitController = TextEditingController();
-  final _factorController = TextEditingController(text: "1"); // حقل المعامل الجديد
-  final _barcodeController = TextEditingController(); // حقل الباركود الجديد
+  final _factorController = TextEditingController(text: "1"); // جديد: للمُعامل
+  final _barcodeController = TextEditingController(); // جديد: للباركود
 
   String? selectedMainId;
   String? selectedSubId;
@@ -31,24 +28,24 @@ class _ProductTabState extends State<ProductTab> {
   String status = 'active';
 
   List<XFile?> selectedImages = [null, null, null, null];
-  // الوحدات بقت قائمة خرائط (Maps) عشان تشيل الاسم والمعامل
+  // تعديل: الوحدات بقت بتشيل الاسم والمعامل
   List<Map<String, dynamic>> unitsWithFactors = []; 
   bool _isLoading = false;
 
   final String cloudName = "dgmmx6jbu";
   final String uploadPreset = "commerce";
 
-  // دالة البحث عن ID القسم أو الشركة بالاسم (مهمة للاستيراد من إكسل)
-  Future<String?> _findDocIdByName(String collection, String name) async {
+  // دالة مساعدة للاكسل عشان تجيب الـ ID بالاسم
+  Future<String?> _getIdByName(String collection, String name) async {
     if (name.isEmpty) return null;
-    try {
-      final snap = await FirebaseFirestore.instance
-          .collection(collection)
-          .where('name', isEqualTo: name.trim())
-          .limit(1)
-          .get();
-      return snap.docs.isNotEmpty ? snap.docs.first.id : null;
-    } catch (e) { return null; }
+    var snap = await FirebaseFirestore.instance.collection(collection).where('name', isEqualTo: name.trim()).limit(1).get();
+    return snap.docs.isNotEmpty ? snap.docs.first.id : null;
+  }
+
+  Future<void> _pickImage(int index) async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(source: ImageSource.gallery);
+    if (image != null) setState(() => selectedImages[index] = image);
   }
 
   void _addUnit() {
@@ -64,17 +61,6 @@ class _ProductTabState extends State<ProductTab> {
     }
   }
 
-  void _openScanner() async {
-    if (kIsWeb) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("استخدم الإدخال اليدوي في الويب")));
-      return;
-    }
-    try {
-      String res = await FlutterBarcodeScanner.scanBarcode("#ff6666", "إلغاء", true, ScanMode.BARCODE);
-      if (res != "-1") setState(() => _barcodeController.text = res);
-    } catch (e) { debugPrint(e.toString()); }
-  }
-
   Future<Map<String, String>?> _uploadSingleImage(XFile xFile) async {
     try {
       final bytes = await xFile.readAsBytes();
@@ -83,6 +69,7 @@ class _ProductTabState extends State<ProductTab> {
         ..fields['upload_preset'] = uploadPreset
         ..fields['folder'] = 'productImages'
         ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: xFile.name));
+
       final response = await request.send();
       if (response.statusCode == 200) {
         final data = jsonDecode(await response.stream.bytesToString());
@@ -92,13 +79,11 @@ class _ProductTabState extends State<ProductTab> {
     return null;
   }
 
-  // --- حفظ يدوي مطور (بيحفظ كل الحقول الأصلية + الباركود) ---
+  // حفظ يدوي (نفس منطق الأصل بالظبط مع زيادة الحقول الجديدة)
   Future<void> _saveProduct() async {
-    if (_nameController.text.isEmpty || _barcodeController.text.isEmpty ||
-        selectedMainId == null || selectedSubId == null ||
-        selectedManufacturerId == null || selectedImages[0] == null ||
-        unitsWithFactors.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("يرجى إكمال البيانات والصور والباركود")));
+    if (_nameController.text.isEmpty || selectedMainId == null || selectedSubId == null || 
+        selectedManufacturerId == null || selectedImages[0] == null || unitsWithFactors.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("يرجى إكمال البيانات والصورة الأساسية ووحدة واحدة على الأقل")));
       return;
     }
 
@@ -119,7 +104,7 @@ class _ProductTabState extends State<ProductTab> {
 
       await FirebaseFirestore.instance.collection('products').add({
         'name': _nameController.text.trim(),
-        'barcode': _barcodeController.text.trim(), // الحقل الجديد
+        'barcode': _barcodeController.text.trim(), // زيادة الباركود
         'description': _descController.text.trim(),
         'mainId': selectedMainId,
         'subId': selectedSubId,
@@ -128,8 +113,8 @@ class _ProductTabState extends State<ProductTab> {
         'status': status,
         'imageUrls': imageUrls,
         'imagePublicIds': imagePublicIds,
-        'units': unitsWithFactors, // بيحفظ Maps (الاسم والمعامل)
-        'unitsWithFactors': unitsWithFactors, // للتوافق مع التحديث الجديد
+        'units': unitsWithFactors, // الوحدات الجديدة
+        'unitsWithFactors': unitsWithFactors, // للربط مع السيستم الجديد
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -138,8 +123,8 @@ class _ProductTabState extends State<ProductTab> {
     } finally { setState(() => _isLoading = false); }
   }
 
-  // --- استيراد إكسل (مطابق لنظام الأقسام والشركات في الأصل) ---
-  Future<void> _importFromExcel() async {
+  // دالة استيراد الإكسل (منفصلة تماماً)
+  Future<void> _importExcel() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['xlsx']);
     if (result == null) return;
     setState(() => _isLoading = true);
@@ -151,43 +136,38 @@ class _ProductTabState extends State<ProductTab> {
           var row = excel.tables[table]!.rows[i];
           String name = row[0]?.value?.toString() ?? "";
           String barcode = row[1]?.value?.toString() ?? "";
-          if (name.isEmpty || barcode.isEmpty) continue;
+          if (name.isEmpty) continue;
 
-          // البحث عن الـ IDs بنفس الأسماء الموجودة في قاعدة بياناتك
-          String? mId = await _findDocIdByName('mainCategory', row[3]?.value?.toString() ?? "");
-          String? sId = await _findDocIdByName('subCategory', row[4]?.value?.toString() ?? "");
-          String? mfgId = await _findDocIdByName('manufacturers', row[5]?.value?.toString() ?? "");
+          var mId = await _getIdByName('mainCategory', row[3]?.value?.toString() ?? "");
+          var sId = await _getIdByName('subCategory', row[4]?.value?.toString() ?? "");
+          var mfgId = await _getIdByName('manufacturers', row[5]?.value?.toString() ?? "");
 
-          List<Map<String, dynamic>> unitsList = [];
-          String unitsRaw = row[6]?.value?.toString() ?? "قطعة:1";
-          for (var u in unitsRaw.split(',')) {
-            var parts = u.trim().split(':');
-            unitsList.add({'unitName': parts[0], 'subQty': parts.length > 1 ? (int.tryParse(parts[1]) ?? 1) : 1});
+          List<Map<String, dynamic>> excelUnits = [];
+          String rawUnits = row[6]?.value?.toString() ?? "قطعة:1";
+          for (var u in rawUnits.split(',')) {
+            var p = u.trim().split(':');
+            excelUnits.add({'unitName': p[0], 'subQty': p.length > 1 ? (int.tryParse(p[1]) ?? 1) : 1});
           }
 
           await FirebaseFirestore.instance.collection('products').add({
             'name': name.trim(),
             'barcode': barcode.trim(),
             'description': row[2]?.value?.toString() ?? "",
-            'mainId': mId,
-            'subId': sId,
-            'manufacturerId': mfgId,
-            'status': 'active',
-            'imageUrls': ["https://res.cloudinary.com/$cloudName/image/upload/v1/productImages/${barcode.trim()}.jpg"],
-            'imagePublicIds': ["productImages/${barcode.trim()}"],
-            'units': unitsList,
-            'unitsWithFactors': unitsList,
+            'mainId': mId, 'subId': sId, 'manufacturerId': mfgId,
+            'status': 'active', 'order': 0,
+            'imageUrls': ["https://res.cloudinary.com/$cloudName/image/upload/v1/productImages/$barcode.jpg"],
+            'imagePublicIds': ["productImages/$barcode"],
+            'units': excelUnits, 'unitsWithFactors': excelUnits,
             'createdAt': FieldValue.serverTimestamp(),
           });
         }
       }
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("اكتمل استيراد ملف الإكسل")));
     } finally { setState(() => _isLoading = false); }
   }
 
   void _resetForm() {
     _nameController.clear(); _descController.clear(); _orderController.clear(); _barcodeController.clear();
-    setState(() { selectedImages = [null, null, null, null]; unitsWithFactors = []; selectedSubId = null; selectedMainId = null; selectedManufacturerId = null; });
+    setState(() { selectedImages = [null, null, null, null]; unitsWithFactors = []; selectedSubId = null; });
   }
 
   @override
@@ -197,10 +177,10 @@ class _ProductTabState extends State<ProductTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // زرار الانتقال للكتالوج (نفس تصميمك الأصلي)
+          // زرار الكتالوج الأصلي
           InkWell(
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProductsReportPage())),
-            child: Container(
+            child: Container(/* ... نفس تصميمك في الأصل ... */
               padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
               decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: const Color(0xFF4361ee).withOpacity(0.3))),
               child: const Row(
@@ -212,28 +192,20 @@ class _ProductTabState extends State<ProductTab> {
               ),
             ),
           ),
-          const SizedBox(height: 15),
-          // زرار استيراد إكسل
-          ElevatedButton.icon(onPressed: _importFromExcel, icon: const Icon(Icons.upload_file), label: const Text("استيراد بيانات من ملف إكسل"), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, minimumSize: const Size(double.infinity, 45))),
+          const SizedBox(height: 10),
+          // زرار الإكسل الجديد (منفصل)
+          ElevatedButton.icon(onPressed: _importExcel, icon: const Icon(Icons.upload_file), label: const Text("استيراد من إكسل"), style: ElevatedButton.styleFrom(backgroundColor: Colors.green, minimumSize: const Size(double.infinity, 45))),
           
           const SizedBox(height: 25),
-          // حقل الباركود مع السكنر
-          TextField(
-            controller: _barcodeController,
-            textAlign: TextAlign.right,
-            decoration: InputDecoration(
-              labelText: "باركود المنتج",
-              prefixIcon: IconButton(onPressed: _openScanner, icon: const Icon(Icons.qr_code_scanner, color: Colors.blue)),
-              border: const OutlineInputBorder(),
-            ),
-          ),
+          // حقل الباركود الجديد
+          TextField(controller: _barcodeController, textAlign: TextAlign.right, decoration: const InputDecoration(labelText: "باركود المنتج (يدوي أو اسكنر)", border: OutlineInputBorder(), prefixIcon: Icon(Icons.qr_code))),
           const SizedBox(height: 10),
           TextField(controller: _nameController, textAlign: TextAlign.right, decoration: const InputDecoration(labelText: "اسم المنتج", border: OutlineInputBorder())),
           const SizedBox(height: 10),
           TextField(controller: _descController, textAlign: TextAlign.right, maxLines: 2, decoration: const InputDecoration(labelText: "وصف المنتج", border: OutlineInputBorder())),
           const SizedBox(height: 10),
 
-          // القوائم المنسدلة (مطابقة للأصل)
+          // القوائم المنسدلة (نفس الأصل)
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('mainCategory').snapshots(),
             builder: (context, snapshot) => DropdownButtonFormField<String>(
@@ -261,40 +233,36 @@ class _ProductTabState extends State<ProductTab> {
             ),
           ),
           const SizedBox(height: 10),
-          TextField(controller: _orderController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "ترتيب العرض", border: OutlineInputBorder())),
+          TextField(controller: _orderController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: "الترتيب", border: OutlineInputBorder())),
           
           const SizedBox(height: 20),
-          const Text("صور المنتج", style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text("صور المنتج (الصورة الأولى إجبارية)", style: TextStyle(fontWeight: FontWeight.bold)),
           GridView.builder(
             shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 1.5),
             itemCount: 4,
             itemBuilder: (context, index) => GestureDetector(
-              onTap: () async {
-                final img = await ImagePicker().pickImage(source: ImageSource.gallery);
-                if (img != null) setState(() => selectedImages[index] = img);
-              },
+              onTap: () => _pickImage(index),
               child: Container(
                 decoration: BoxDecoration(border: Border.all(color: index == 0 ? Colors.blue : Colors.grey), borderRadius: BorderRadius.circular(8)),
-                child: selectedImages[index] == null ? const Icon(Icons.add_a_photo) : ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(selectedImages[index]!.path, fit: BoxFit.cover)),
+                child: selectedImages[index] == null 
+                  ? Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.add_a_photo), Text("صورة ${index + 1}")])
+                  : ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(selectedImages[index]!.path, fit: BoxFit.cover)),
               ),
             ),
           ),
 
           const SizedBox(height: 20),
-          const Text("إضافة وحدات البيع والمعامل", style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text("وحدات البيع والمعامل", style: TextStyle(fontWeight: FontWeight.bold)),
           Row(
             children: [
               IconButton(onPressed: _addUnit, icon: const Icon(Icons.add_circle, color: Colors.green)),
-              Expanded(child: TextField(controller: _unitController, textAlign: TextAlign.right, decoration: const InputDecoration(hintText: "اسم الوحدة (كرتونة)"))),
+              Expanded(child: TextField(controller: _unitController, textAlign: TextAlign.right, decoration: const InputDecoration(hintText: "كرتونة"))),
               const SizedBox(width: 5),
-              Expanded(child: TextField(controller: _factorController, keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: "المعامل (12)"))),
+              Expanded(child: TextField(controller: _factorController, keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: "12"))),
             ],
           ),
-          Wrap(
-            spacing: 8,
-            children: unitsWithFactors.map((u) => Chip(label: Text("${u['unitName']} (${u['subQty']})"), onDeleted: () => setState(() => unitsWithFactors.remove(u)))).toList(),
-          ),
+          Wrap(spacing: 8, children: unitsWithFactors.map((u) => Chip(label: Text("${u['unitName']} (${u['subQty']})"), onDeleted: () => setState(() => unitsWithFactors.remove(u)))).toList()),
 
           const SizedBox(height: 30),
           ElevatedButton(
