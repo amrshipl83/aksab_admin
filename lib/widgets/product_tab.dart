@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:excel/excel.dart' as excel_lib; // حل مشكلة التعارض هنا
+import 'package:excel/excel.dart' as excel_lib; // حل تعارض الـ Border
 import 'package:file_picker/file_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../pages/products_report_page.dart';
@@ -20,7 +20,7 @@ class _ProductTabState extends State<ProductTab> {
   final _descController = TextEditingController();
   final _orderController = TextEditingController();
   final _unitController = TextEditingController();
-  final _factorController = TextEditingController(text: "1"); // حقل معامل التحويل
+  final _factorController = TextEditingController(text: "1");
   final _barcodeController = TextEditingController();
 
   String? selectedMainId;
@@ -29,7 +29,7 @@ class _ProductTabState extends State<ProductTab> {
   String status = 'active';
 
   List<XFile?> selectedImages = [null, null, null, null];
-  List<Map<String, dynamic>> units = []; // تغيير مصفوفة الوحدات لتشمل المعامل
+  List<Map<String, dynamic>> unitsWithFactors = []; 
   bool _isLoading = false;
 
   final String cloudName = "dgmmx6jbu";
@@ -57,7 +57,7 @@ class _ProductTabState extends State<ProductTab> {
       setState(() => _isLoading = true);
       try {
         var bytes = result.files.first.bytes;
-        var excel = excel_lib.Excel.decodeBytes(bytes!); // استخدام اللقب الجديد
+        var excel = excel_lib.Excel.decodeBytes(bytes!);
         int importedCount = 0;
 
         for (var table in excel.tables.keys) {
@@ -77,14 +77,19 @@ class _ProductTabState extends State<ProductTab> {
             String? sId = await _findDocIdByName('subCategory', subCatName);
             String? mfgId = await _findDocIdByName('manufacturers', manufacturerName);
 
-            // معالجة الوحدات بالمعامل (اسم:معامل)
-            List<Map<String, dynamic>> excelUnits = unitsRaw.split(',').map((u) {
-              var parts = u.trim().split(':');
-              return {
-                'unitName': parts[0],
-                'subQty': parts.length > 1 ? (int.tryParse(parts[1]) ?? 1) : 1,
-              };
-            }).toList();
+            // تحضير البيانات للهيكلين (القديم والجديد)
+            List<String> oldUnitsList = [];
+            List<Map<String, dynamic>> newUnitsList = [];
+
+            List<String> rawParts = unitsRaw.split(',');
+            for (var p in rawParts) {
+              var splitP = p.trim().split(':');
+              String uName = splitP[0];
+              int uFactor = splitP.length > 1 ? (int.tryParse(splitP[1]) ?? 1) : 1;
+              
+              oldUnitsList.add(uName);
+              newUnitsList.add({'unitName': uName, 'subQty': uFactor});
+            }
 
             String autoImageUrl = "https://res.cloudinary.com/$cloudName/image/upload/v1/productImages/$barcode.jpg";
 
@@ -99,7 +104,8 @@ class _ProductTabState extends State<ProductTab> {
               'status': 'active',
               'imageUrls': [autoImageUrl],
               'imagePublicIds': [],
-              'units': excelUnits,
+              'units': oldUnitsList, // للنسخة الحالية (Live)
+              'unitsWithFactors': newUnitsList, // للنسخة القادمة والـ ERP
               'createdAt': FieldValue.serverTimestamp(),
             });
             importedCount++;
@@ -178,6 +184,11 @@ class _ProductTabState extends State<ProductTab> {
           }
         }
       }
+
+      // تحضير المصفوفة القديمة للنسخة الحالية
+      List<String> oldUnits = unitsWithFactors.map((u) => u['unitName'].toString()).toList();
+      if (oldUnits.isEmpty) oldUnits = ['قطعة'];
+
       await FirebaseFirestore.instance.collection('products').add({
         'name': _nameController.text.trim(),
         'barcode': _barcodeController.text.trim(),
@@ -189,7 +200,8 @@ class _ProductTabState extends State<ProductTab> {
         'status': status,
         'imageUrls': imageUrls,
         'imagePublicIds': imagePublicIds,
-        'units': units.isEmpty ? [{'unitName': 'قطعة', 'subQty': 1}] : units,
+        'units': oldUnits, // الحقل القديم لضمان عمل التطبيق الحالي
+        'unitsWithFactors': unitsWithFactors.isEmpty ? [{'unitName': 'قطعة', 'subQty': 1}] : unitsWithFactors,
         'createdAt': FieldValue.serverTimestamp(),
       });
       _resetForm();
@@ -199,7 +211,7 @@ class _ProductTabState extends State<ProductTab> {
 
   void _resetForm() {
     _nameController.clear(); _descController.clear(); _orderController.clear(); _barcodeController.clear();
-    setState(() { selectedImages = [null, null, null, null]; units = []; });
+    setState(() { selectedImages = [null, null, null, null]; unitsWithFactors = []; });
   }
 
   @override
@@ -247,7 +259,6 @@ class _ProductTabState extends State<ProductTab> {
             decoration: const InputDecoration(labelText: "اسم المنتج", border: OutlineInputBorder()),
           ),
           const SizedBox(height: 10),
-          // ... (StreamBuilders للقسم الرئيسي والفرعي والشركة تبقى كما هي) ...
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('mainCategory').snapshots(),
             builder: (context, snapshot) {
@@ -288,8 +299,7 @@ class _ProductTabState extends State<ProductTab> {
             },
           ),
           const SizedBox(height: 20),
-          // واجهة الصور اليدوية (تم حل تعارض Border هنا تلقائياً بفضل Flutter)
-          const Text("صور المنتج (4 صور بحد أقصى)", style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text("صور المنتج (اختياري للإكسل / إجباري للمفرد)", style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           GridView.builder(
             shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
@@ -299,9 +309,7 @@ class _ProductTabState extends State<ProductTab> {
               return GestureDetector(
                 onTap: () => _pickImage(index),
                 child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: index == 0 ? Colors.blue : Colors.grey), // تم استخدام Border من Flutter
-                    borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(border: Border.all(color: index == 0 ? Colors.blue : Colors.grey), borderRadius: BorderRadius.circular(8)),
                   child: selectedImages[index] == null
                     ? Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.add_a_photo), Text("صورة ${index + 1}")])
                     : ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(selectedImages[index]!.path, fit: BoxFit.cover)),
@@ -310,13 +318,13 @@ class _ProductTabState extends State<ProductTab> {
             },
           ),
           const SizedBox(height: 20),
-          const Text("إضافة وحدات يدوية (الاسم : المعامل)", style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text("إضافة وحدات (الاسم : المعامل)", style: TextStyle(fontWeight: FontWeight.bold)),
           Row(
             children: [
               IconButton(onPressed: () { 
                 if(_unitController.text.isNotEmpty) {
                   setState(() {
-                    units.add({
+                    unitsWithFactors.add({
                       'unitName': _unitController.text.trim(),
                       'subQty': int.tryParse(_factorController.text) ?? 1
                     });
@@ -330,7 +338,7 @@ class _ProductTabState extends State<ProductTab> {
               Expanded(flex: 1, child: TextField(controller: _factorController, keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: "المعامل (12)"))),
             ],
           ),
-          Wrap(spacing: 8, children: units.map((u) => Chip(label: Text("${u['unitName']} (${u['subQty']})"), onDeleted: () => setState(() => units.remove(u)))).toList()),
+          Wrap(spacing: 8, children: unitsWithFactors.map((u) => Chip(label: Text("${u['unitName']} (${u['subQty']})"), onDeleted: () => setState(() => unitsWithFactors.remove(u)))).toList()),
           const SizedBox(height: 30),
           ElevatedButton(
             onPressed: _isLoading ? null : _saveProduct,
