@@ -140,11 +140,13 @@ class _ProductTabState extends State<ProductTab> {
     setState(() => _isLoading = true);
 
     try {
-      await ExcelImportService.importWithImages(
-        excelFile: excelResult.files.first,
-        imageFiles: imagesResult.files,
-        onProgress: (msg) {
-          debugPrint(msg);
+      // ✅ الكود الجديد المتوافق مع الـ UI
+await ExcelImportService.importWithImages(
+  context: context, // بنبعت الـ context بدلاً من الـ onProgress
+  excelFile: excelResult.files.first,
+  imageFiles: imagesResult.files,
+);
+
           // يمكن مستقبلاً عمل ProgressDialog هنا
         },
       );
