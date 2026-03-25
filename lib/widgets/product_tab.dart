@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:excel/excel.dart';
+import 'package:excel/excel.dart' as excel_lib; // حل مشكلة التعارض هنا
 import 'package:file_picker/file_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../pages/products_report_page.dart';
@@ -20,6 +20,7 @@ class _ProductTabState extends State<ProductTab> {
   final _descController = TextEditingController();
   final _orderController = TextEditingController();
   final _unitController = TextEditingController();
+  final _factorController = TextEditingController(text: "1"); // حقل معامل التحويل
   final _barcodeController = TextEditingController();
 
   String? selectedMainId;
@@ -28,7 +29,7 @@ class _ProductTabState extends State<ProductTab> {
   String status = 'active';
 
   List<XFile?> selectedImages = [null, null, null, null];
-  List<String> units = [];
+  List<Map<String, dynamic>> units = []; // تغيير مصفوفة الوحدات لتشمل المعامل
   bool _isLoading = false;
 
   final String cloudName = "dgmmx6jbu";
@@ -56,7 +57,7 @@ class _ProductTabState extends State<ProductTab> {
       setState(() => _isLoading = true);
       try {
         var bytes = result.files.first.bytes;
-        var excel = Excel.decodeBytes(bytes!);
+        var excel = excel_lib.Excel.decodeBytes(bytes!); // استخدام اللقب الجديد
         int importedCount = 0;
 
         for (var table in excel.tables.keys) {
@@ -68,7 +69,7 @@ class _ProductTabState extends State<ProductTab> {
             String mainCatName = row[3]?.value?.toString() ?? "";
             String subCatName = row[4]?.value?.toString() ?? "";
             String manufacturerName = row[5]?.value?.toString() ?? "";
-            String unitsRaw = row[6]?.value?.toString() ?? "قطعة"; // العمود G
+            String unitsRaw = row[6]?.value?.toString() ?? "قطعة:1";
 
             if (name.isEmpty || barcode.isEmpty) continue;
 
@@ -76,10 +77,14 @@ class _ProductTabState extends State<ProductTab> {
             String? sId = await _findDocIdByName('subCategory', subCatName);
             String? mfgId = await _findDocIdByName('manufacturers', manufacturerName);
 
-            // تحويل الوحدات من نص (فاصلة) لمصفوفة Maps
-            List<Map<String, String>> excelUnits = unitsRaw.split(',')
-                .map((u) => {'unitName': u.trim()})
-                .toList();
+            // معالجة الوحدات بالمعامل (اسم:معامل)
+            List<Map<String, dynamic>> excelUnits = unitsRaw.split(',').map((u) {
+              var parts = u.trim().split(':');
+              return {
+                'unitName': parts[0],
+                'subQty': parts.length > 1 ? (int.tryParse(parts[1]) ?? 1) : 1,
+              };
+            }).toList();
 
             String autoImageUrl = "https://res.cloudinary.com/$cloudName/image/upload/v1/productImages/$barcode.jpg";
 
@@ -94,13 +99,13 @@ class _ProductTabState extends State<ProductTab> {
               'status': 'active',
               'imageUrls': [autoImageUrl],
               'imagePublicIds': [],
-              'units': excelUnits, // الوحدات المتعددة هنا
+              'units': excelUnits,
               'createdAt': FieldValue.serverTimestamp(),
             });
             importedCount++;
           }
         }
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("تم استيراد $importedCount منتج بوحداتهم بنجاح")));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("تم استيراد $importedCount منتج بنجاح")));
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("خطأ في قراءة ملف الإكسل")));
       } finally {
@@ -184,7 +189,7 @@ class _ProductTabState extends State<ProductTab> {
         'status': status,
         'imageUrls': imageUrls,
         'imagePublicIds': imagePublicIds,
-        'units': units.isEmpty ? [{'unitName': 'قطعة'}] : units.map((u) => {'unitName': u}).toList(),
+        'units': units.isEmpty ? [{'unitName': 'قطعة', 'subQty': 1}] : units,
         'createdAt': FieldValue.serverTimestamp(),
       });
       _resetForm();
@@ -242,6 +247,7 @@ class _ProductTabState extends State<ProductTab> {
             decoration: const InputDecoration(labelText: "اسم المنتج", border: OutlineInputBorder()),
           ),
           const SizedBox(height: 10),
+          // ... (StreamBuilders للقسم الرئيسي والفرعي والشركة تبقى كما هي) ...
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('mainCategory').snapshots(),
             builder: (context, snapshot) {
@@ -282,7 +288,8 @@ class _ProductTabState extends State<ProductTab> {
             },
           ),
           const SizedBox(height: 20),
-          const Text("صور المنتج (اختياري للإكسل / إجباري للمفرد)", style: TextStyle(fontWeight: FontWeight.bold)),
+          // واجهة الصور اليدوية (تم حل تعارض Border هنا تلقائياً بفضل Flutter)
+          const Text("صور المنتج (4 صور بحد أقصى)", style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           GridView.builder(
             shrinkWrap: true, physics: const NeverScrollableScrollPhysics(),
@@ -292,7 +299,9 @@ class _ProductTabState extends State<ProductTab> {
               return GestureDetector(
                 onTap: () => _pickImage(index),
                 child: Container(
-                  decoration: BoxDecoration(border: Border.all(color: index == 0 ? Colors.blue : Colors.grey), borderRadius: BorderRadius.circular(8)),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: index == 0 ? Colors.blue : Colors.grey), // تم استخدام Border من Flutter
+                    borderRadius: BorderRadius.circular(8)),
                   child: selectedImages[index] == null
                     ? Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.add_a_photo), Text("صورة ${index + 1}")])
                     : ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(selectedImages[index]!.path, fit: BoxFit.cover)),
@@ -301,14 +310,27 @@ class _ProductTabState extends State<ProductTab> {
             },
           ),
           const SizedBox(height: 20),
-          const Text("إضافة وحدات يدوية (للمنتج المفرد)", style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text("إضافة وحدات يدوية (الاسم : المعامل)", style: TextStyle(fontWeight: FontWeight.bold)),
           Row(
             children: [
-              IconButton(onPressed: () { if(_unitController.text.isNotEmpty) setState(() { units.add(_unitController.text.trim()); _unitController.clear(); }); }, icon: const Icon(Icons.add_circle, color: Colors.green)),
-              Expanded(child: TextField(controller: _unitController, textAlign: TextAlign.right, decoration: const InputDecoration(hintText: "مثال: كرتونة، علبة..."))),
+              IconButton(onPressed: () { 
+                if(_unitController.text.isNotEmpty) {
+                  setState(() {
+                    units.add({
+                      'unitName': _unitController.text.trim(),
+                      'subQty': int.tryParse(_factorController.text) ?? 1
+                    });
+                    _unitController.clear();
+                    _factorController.text = "1";
+                  });
+                }
+              }, icon: const Icon(Icons.add_circle, color: Colors.green)),
+              Expanded(flex: 2, child: TextField(controller: _unitController, textAlign: TextAlign.right, decoration: const InputDecoration(hintText: "اسم الوحدة (كرتونة)"))),
+              const SizedBox(width: 10),
+              Expanded(flex: 1, child: TextField(controller: _factorController, keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: "المعامل (12)"))),
             ],
           ),
-          Wrap(spacing: 8, children: units.map((u) => Chip(label: Text(u), onDeleted: () => setState(() => units.remove(u)))).toList()),
+          Wrap(spacing: 8, children: units.map((u) => Chip(label: Text("${u['unitName']} (${u['subQty']})"), onDeleted: () => setState(() => units.remove(u)))).toList()),
           const SizedBox(height: 30),
           ElevatedButton(
             onPressed: _isLoading ? null : _saveProduct,
@@ -321,4 +343,3 @@ class _ProductTabState extends State<ProductTab> {
     );
   }
 }
-
