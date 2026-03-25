@@ -34,15 +34,25 @@ class ExcelImportService {
           _showSnackBar(context, "جاري معالجة: $name");
 
           // 1. البحث المرن عن الصورة
-          PlatformFile? matchedImage;
-          try {
-            matchedImage = imageFiles.firstWhere((file) {
-              String fileName = file.name.split('.').first.trim().toLowerCase();
-              return fileName == barcode.toLowerCase();
-            });
-          } catch (e) {
-            matchedImage = null;
-          }
+          // استبدل حتة البحث عن الصورة بالمنطق ده:
+PlatformFile? matchedImage;
+try {
+  matchedImage = imageFiles.firstWhere((file) {
+    // 1. تنظيف اسم الملف من أي مسافات وتحويله لصغير
+    String fileName = file.name.toLowerCase();
+    // 2. تنظيف الباركود من الإكسل
+    String barcodeClean = barcode.trim().toLowerCase();
+    
+    // 3. المقارنة: هل اسم الملف "يبدأ" بالباركود؟ 
+    // دي أدق طريقة عشان نتخطى مشكلة (.jpg أو .png)
+    return fileName.startsWith(barcodeClean);
+  });
+  debugPrint("✅ تم التطابق: ${matchedImage.name}");
+} catch (e) {
+  _showSnackBar(context, "❌ لم يتم العثور على صورة للباركود: $barcode", isError: true);
+  matchedImage = null;
+}
+
 
           List<String> urls = [];
           List<String> publicIds = [];
