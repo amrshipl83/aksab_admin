@@ -20,7 +20,7 @@ class _ProductTabState extends State<ProductTab> {
   final _descController = TextEditingController();
   final _orderController = TextEditingController();
   final _unitController = TextEditingController();
-  final _barcodeController = TextEditingController(); // حقل الباركود
+  final _barcodeController = TextEditingController();
 
   String? selectedMainId;
   String? selectedSubId;
@@ -34,7 +34,6 @@ class _ProductTabState extends State<ProductTab> {
   final String cloudName = "dgmmx6jbu";
   final String uploadPreset = "commerce";
 
-  // --- دالة مساعدة للبحث عن الـ ID بالاسم لضمان الربط الصحيح مع الإكسل ---
   Future<String?> _findDocIdByName(String collection, String name) async {
     if (name.isEmpty) return null;
     try {
@@ -45,12 +44,10 @@ class _ProductTabState extends State<ProductTab> {
           .get();
       return snap.docs.isNotEmpty ? snap.docs.first.id : null;
     } catch (e) {
-      debugPrint("Search Error ($collection): $e");
       return null;
     }
   }
 
-  // --- دالة استيراد الإكسل الذكية ---
   Future<void> _importFromExcel() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -65,10 +62,8 @@ class _ProductTabState extends State<ProductTab> {
         int importedCount = 0;
 
         for (var table in excel.tables.keys) {
-          // تبدأ البيانات من الصف الثاني (تجاوز العنوان)
           for (var i = 1; i < excel.tables[table]!.maxRows; i++) {
             var row = excel.tables[table]!.rows[i];
-            
             String name = row[0]?.value?.toString() ?? "";
             String barcode = row[1]?.value?.toString() ?? "";
             String desc = row[2]?.value?.toString() ?? "";
@@ -78,25 +73,23 @@ class _ProductTabState extends State<ProductTab> {
             
             if (name.isEmpty || barcode.isEmpty) continue;
 
-            // جلب الـ IDs للأقسام والشركة تلقائياً
             String? mId = await _findDocIdByName('mainCategory', mainCatName);
             String? sId = await _findDocIdByName('subCategory', subCatName);
             String? mfgId = await _findDocIdByName('manufacturers', manufacturerName);
 
-            // تركيب رابط الصورة التلقائي (الباركود هو اسم الصورة)
             String autoImageUrl = "https://res.cloudinary.com/$cloudName/image/upload/v1/productImages/$barcode.jpg";
 
             await FirebaseFirestore.instance.collection('products').add({
               'name': name.trim(),
               'barcode': barcode.trim(),
               'description': desc.trim(),
-              'mainId': mId ?? selectedMainId, // الإكسل أولاً ثم المختار يدوياً
+              'mainId': mId ?? selectedMainId,
               'subId': sId ?? selectedSubId,
               'manufacturerId': mfgId ?? selectedManufacturerId,
               'order': 0,
               'status': 'active',
               'imageUrls': [autoImageUrl],
-              'imagePublicIds': [], // فارغ لأنها مرفوعة مسبقاً برابط مباشر
+              'imagePublicIds': [],
               'units': [{'unitName': 'قطعة'}],
               'createdAt': FieldValue.serverTimestamp(),
             });
@@ -105,7 +98,6 @@ class _ProductTabState extends State<ProductTab> {
         }
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("تم استيراد $importedCount منتج بنجاح")));
       } catch (e) {
-        debugPrint("Excel Error: $e");
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("خطأ في قراءة ملف الإكسل")));
       } finally {
         setState(() => _isLoading = false);
@@ -113,7 +105,7 @@ class _ProductTabState extends State<ProductTab> {
     }
   }
 
-  // --- دالة فتح سكانر الباركود ---
+  // تطوير السكانر ليدعم الأكواد الدولية EAN-13
   void _openScanner() {
     showDialog(
       context: context,
@@ -123,6 +115,10 @@ class _ProductTabState extends State<ProductTab> {
           width: 300,
           height: 300,
           child: MobileScanner(
+            controller: MobileScannerController(
+              formats: [BarcodeFormat.all], // يدعم كل الأنواع الدولية
+              facing: CameraFacing.back,
+            ),
             onDetect: (capture) {
               final List<Barcode> barcodes = capture.barcodes;
               if (barcodes.isNotEmpty) {
@@ -159,16 +155,14 @@ class _ProductTabState extends State<ProductTab> {
         return {'url': data['secure_url'], 'public_id': data['public_id']};
       }
     } catch (e) {
-      debugPrint("Upload Error: $e");
+      return null;
     }
     return null;
   }
 
   Future<void> _saveProduct() async {
-    if (_nameController.text.isEmpty || _barcodeController.text.isEmpty ||
-        selectedMainId == null || selectedSubId == null ||
-        selectedManufacturerId == null || (selectedImages[0] == null && units.isEmpty)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("يرجى إكمال البيانات الأساسية والباركود")));
+    if (_nameController.text.isEmpty || _barcodeController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("يرجى إدخال الاسم والباركود")));
       return;
     }
 
@@ -198,7 +192,7 @@ class _ProductTabState extends State<ProductTab> {
         'status': status,
         'imageUrls': imageUrls,
         'imagePublicIds': imagePublicIds,
-        'units': units.map((u) => {'unitName': u}).toList(),
+        'units': units.isEmpty ? [{'unitName': 'قطعة'}] : units.map((u) => {'unitName': u}).toList(),
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -217,7 +211,6 @@ class _ProductTabState extends State<ProductTab> {
     setState(() {
       selectedImages = [null, null, null, null];
       units = [];
-      selectedSubId = null;
     });
   }
 
@@ -269,7 +262,6 @@ class _ProductTabState extends State<ProductTab> {
           ),
           const SizedBox(height: 10),
 
-          // اختيار القسم الرئيسي
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('mainCategory').snapshots(),
             builder: (context, snapshot) {
@@ -286,7 +278,6 @@ class _ProductTabState extends State<ProductTab> {
           ),
           const SizedBox(height: 10),
 
-          // اختيار القسم الفرعي
           if (selectedMainId != null)
             StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance.collection('subCategory').where('mainId', isEqualTo: selectedMainId).snapshots(),
@@ -302,7 +293,6 @@ class _ProductTabState extends State<ProductTab> {
             ),
           const SizedBox(height: 10),
 
-          // اختيار الشركة المصنعة
           StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance.collection('manufacturers').snapshots(),
             builder: (context, snapshot) {
@@ -315,6 +305,31 @@ class _ProductTabState extends State<ProductTab> {
               );
             },
           ),
+          const SizedBox(height: 20),
+
+          // إرجاع واجهة اختيار الصور اليدوية
+          const Text("صور المنتج (اختياري للإكسل / إجباري للمفرد)", style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 10),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10, childAspectRatio: 1.5),
+            itemCount: 4,
+            itemBuilder: (context, index) {
+              return GestureDetector(
+                onTap: () => _pickImage(index),
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: index == 0 ? Colors.blue : Colors.grey),
+                    borderRadius: BorderRadius.circular(8)),
+                  child: selectedImages[index] == null
+                    ? Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.add_a_photo), Text("صورة ${index + 1}")])
+                    : ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(selectedImages[index]!.path, fit: BoxFit.cover)),
+                ),
+              );
+            },
+          ),
           const SizedBox(height: 30),
 
           ElevatedButton(
@@ -322,6 +337,7 @@ class _ProductTabState extends State<ProductTab> {
             style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 50), backgroundColor: const Color(0xFF4361ee)),
             child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("حفظ المنتج النهائي", style: TextStyle(color: Colors.white)),
           ),
+          const SizedBox(height: 50),
         ],
       ),
     );
