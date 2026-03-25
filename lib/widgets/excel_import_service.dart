@@ -21,34 +21,27 @@ class ExcelImportService {
       var excel = Excel.decodeBytes(bytes!);
 
       for (var table in excel.tables.keys) {
-        for (var i = 1; i < excel.tables[table]!.maxRows; i++) {
-          var row = excel.tables[table]!.rows[i];
-          
+        var rows = excel.tables[table]!.rows;
+        
+        // نبدأ من 1 لتخطي العناوين
+        for (var i = 1; i < rows.length; i++) {
+          var row = rows[i];
           String name = row[0]?.value?.toString() ?? "";
-          
-          // تنظيف الباركود من أي علامات عشرية (زي 622.0) ومن المسافات
           String rawBarcode = row[1]?.value?.toString() ?? "";
           String barcode = rawBarcode.split('.').first.trim();
           
-          if (barcode.isEmpty) continue;
+          if (barcode.isEmpty || name.isEmpty) continue;
 
-          _showSnackBar(context, "جاري معالجة: $name");
-
-          // --- التعديل المدمج: البحث الذكي بالبداية ---
+          // --- الربط بالترتيب (Index) ---
+          // المنتج رقم 1 (i=1) ياخد الصورة رقم 0 (i-1)
           PlatformFile? matchedImage;
-          try {
-            matchedImage = imageFiles.firstWhere((file) {
-              String fileName = file.name.toLowerCase();
-              String barcodeClean = barcode.toLowerCase();
-              // التأكد من أن اسم الملف يبدأ بالباركود (يتجاهل الامتداد والمسافات)
-              return fileName.startsWith(barcodeClean);
-            });
-            debugPrint("✅ تم التطابق: ${matchedImage.name}");
-          } catch (e) {
-            // لو فشل، بيطبع لك أول اسم ملف هو شايفه عشان نعرف العيب فين
-            String hint = imageFiles.isNotEmpty ? imageFiles.first.name : "لا توجد صور";
-            _showSnackBar(context, "❌ مفيش صورة لـ $barcode (أول ملف: $hint)", isError: true);
-            matchedImage = null;
+          int imageIndex = i - 1; 
+
+          if (imageIndex < imageFiles.length) {
+            matchedImage = imageFiles[imageIndex];
+            _showSnackBar(context, "✅ ربط صورة ترتيب رقم ${imageIndex + 1} بمنتج: $name");
+          } else {
+            _showSnackBar(context, "⚠️ لا توجد صورة كافية لمنتج: $name", isError: true);
           }
 
           List<String> urls = [];
@@ -59,12 +52,10 @@ class ExcelImportService {
             if (result != null) {
               urls.add(result['url']!);
               publicIds.add(result['public_id']!);
-            } else {
-              _showSnackBar(context, "⚠️ فشل رفع صورة: $barcode", isError: true);
             }
           }
 
-          // إضافة البيانات لفايربيز
+          // إضافة لفايربيز (نفس الحقول والأسماء المتفق عليها لـ رابية أحلى)
           await FirebaseFirestore.instance.collection('products').add({
             'name': name.trim(),
             'barcode': barcode,
@@ -78,48 +69,43 @@ class ExcelImportService {
             'unitsWithFactors': _parseUnits(row[6]?.value?.toString() ?? "قطعة:1"),
             'createdAt': FieldValue.serverTimestamp(),
           });
+          
+          // تأخير بسيط لضمان استقرار الرفع
+          await Future.delayed(const Duration(milliseconds: 500));
         }
       }
-      _showDialog(context, "تمت العملية", "تم استيراد كافة المنتجات بنجاح ✅");
+      _showDialog(context, "تمت العملية", "تم استيراد كافة المنتجات وربط الصور بالترتيب بنجاح ✅");
     } catch (e) {
-      _showDialog(context, "خطأ غير متوقع", e.toString());
+      _showDialog(context, "خطأ", e.toString());
     }
   }
 
   static Future<Map<String, String>?> _uploadToCloudinary(PlatformFile file) async {
     try {
       final url = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/image/upload');
-      
-      dynamic fileBytes;
+      Uint8List fileBytes;
       if (kIsWeb) {
-        fileBytes = file.bytes;
+        fileBytes = file.bytes!;
       } else {
         fileBytes = await File(file.path!).readAsBytes();
       }
-
       var request = http.MultipartRequest('POST', url)
         ..fields['upload_preset'] = uploadPreset
         ..fields['folder'] = 'productImages'
         ..files.add(http.MultipartFile.fromBytes('file', fileBytes, filename: file.name));
-
       var response = await request.send();
       if (response.statusCode == 200) {
         var data = jsonDecode(await response.stream.bytesToString());
         return {'url': data['secure_url'], 'public_id': data['public_id']};
       }
-    } catch (e) {
-      return null;
-    }
+    } catch (e) { return null; }
     return null;
   }
 
   static Future<String?> _getIdByName(String collection, String name) async {
     if (name.isEmpty) return null;
-    var snap = await FirebaseFirestore.instance
-        .collection(collection)
-        .where('name', isEqualTo: name.trim())
-        .limit(1)
-        .get();
+    var snap = await FirebaseFirestore.instance.collection(collection)
+        .where('name', isEqualTo: name.trim()).limit(1).get();
     return snap.docs.isNotEmpty ? snap.docs.first.id : null;
   }
 
@@ -142,7 +128,7 @@ class ExcelImportService {
       SnackBar(
         content: Text(message, textAlign: TextAlign.right, style: const TextStyle(fontFamily: 'Cairo')),
         backgroundColor: isError ? Colors.red : Colors.blueGrey,
-        duration: const Duration(milliseconds: 1500),
+        duration: const Duration(seconds: 1),
       ),
     );
   }
