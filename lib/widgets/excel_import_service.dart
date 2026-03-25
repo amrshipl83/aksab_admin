@@ -12,7 +12,7 @@ class ExcelImportService {
   static const String uploadPreset = "commerce";
 
   static Future<void> importWithImages({
-    required BuildContext context, // أضفنا الكونتيكست عشان الرسايل
+    required BuildContext context,
     required List<PlatformFile> imageFiles,
     required PlatformFile excelFile,
   }) async {
@@ -21,44 +21,40 @@ class ExcelImportService {
       var excel = Excel.decodeBytes(bytes!);
 
       for (var table in excel.tables.keys) {
-        // نبدأ من الصف التاني لتجاهل العناوين
         for (var i = 1; i < excel.tables[table]!.maxRows; i++) {
           var row = excel.tables[table]!.rows[i];
           
           String name = row[0]?.value?.toString() ?? "";
-          String barcode = row[1]?.value?.toString()?.trim() ?? "";
+          
+          // تنظيف الباركود من أي علامات عشرية (زي 622.0) ومن المسافات
+          String rawBarcode = row[1]?.value?.toString() ?? "";
+          String barcode = rawBarcode.split('.').first.trim();
           
           if (barcode.isEmpty) continue;
 
-          // رسالة توضح المنتج اللي شغالين عليه دلوقتي
           _showSnackBar(context, "جاري معالجة: $name");
 
-          // 1. البحث المرن عن الصورة
-          // استبدل حتة البحث عن الصورة بالمنطق ده:
-PlatformFile? matchedImage;
-try {
-  matchedImage = imageFiles.firstWhere((file) {
-    // 1. تنظيف اسم الملف من أي مسافات وتحويله لصغير
-    String fileName = file.name.toLowerCase();
-    // 2. تنظيف الباركود من الإكسل
-    String barcodeClean = barcode.trim().toLowerCase();
-    
-    // 3. المقارنة: هل اسم الملف "يبدأ" بالباركود؟ 
-    // دي أدق طريقة عشان نتخطى مشكلة (.jpg أو .png)
-    return fileName.startsWith(barcodeClean);
-  });
-  debugPrint("✅ تم التطابق: ${matchedImage.name}");
-} catch (e) {
-  _showSnackBar(context, "❌ لم يتم العثور على صورة للباركود: $barcode", isError: true);
-  matchedImage = null;
-}
-
+          // --- التعديل المدمج: البحث الذكي بالبداية ---
+          PlatformFile? matchedImage;
+          try {
+            matchedImage = imageFiles.firstWhere((file) {
+              String fileName = file.name.toLowerCase();
+              String barcodeClean = barcode.toLowerCase();
+              // التأكد من أن اسم الملف يبدأ بالباركود (يتجاهل الامتداد والمسافات)
+              return fileName.startsWith(barcodeClean);
+            });
+            debugPrint("✅ تم التطابق: ${matchedImage.name}");
+          } catch (e) {
+            // لو فشل، بيطبع لك أول اسم ملف هو شايفه عشان نعرف العيب فين
+            String hint = imageFiles.isNotEmpty ? imageFiles.first.name : "لا توجد صور";
+            _showSnackBar(context, "❌ مفيش صورة لـ $barcode (أول ملف: $hint)", isError: true);
+            matchedImage = null;
+          }
 
           List<String> urls = [];
           List<String> publicIds = [];
 
           if (matchedImage != null) {
-            // 2. الرفع المضمون (Path للأندرويد و Bytes للويب)
             var result = await _uploadToCloudinary(matchedImage);
             if (result != null) {
               urls.add(result['url']!);
@@ -66,11 +62,9 @@ try {
             } else {
               _showSnackBar(context, "⚠️ فشل رفع صورة: $barcode", isError: true);
             }
-          } else {
-            _showSnackBar(context, "❌ لم يتم العثور على صورة للباركود: $barcode", isError: true);
           }
 
-          // 3. إضافة البيانات لفايربيز
+          // إضافة البيانات لفايربيز
           await FirebaseFirestore.instance.collection('products').add({
             'name': name.trim(),
             'barcode': barcode,
@@ -86,13 +80,12 @@ try {
           });
         }
       }
-      _showDialog(context, "تمت العملية", "تم استيراد كافة المنتجات ورفع الصور المتاحة بنجاح ✅");
+      _showDialog(context, "تمت العملية", "تم استيراد كافة المنتجات بنجاح ✅");
     } catch (e) {
       _showDialog(context, "خطأ غير متوقع", e.toString());
     }
   }
 
-  // دالة الرفع المعدلة لتناسب الأندرويد
   static Future<Map<String, String>?> _uploadToCloudinary(PlatformFile file) async {
     try {
       final url = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/image/upload');
@@ -120,7 +113,6 @@ try {
     return null;
   }
 
-  // دالة مساعدة لجلب ID الأقسام والمصنعين
   static Future<String?> _getIdByName(String collection, String name) async {
     if (name.isEmpty) return null;
     var snap = await FirebaseFirestore.instance
@@ -131,7 +123,6 @@ try {
     return snap.docs.isNotEmpty ? snap.docs.first.id : null;
   }
 
-  // تحويل نص الوحدات (قطعة:1,كرتونة:12) إلى List
   static List<Map<String, dynamic>> _parseUnits(String raw) {
     List<Map<String, dynamic>> list = [];
     for (var u in raw.split(',')) {
@@ -146,13 +137,12 @@ try {
     return list;
   }
 
-  // --- دوال الـ UI للتنبيهات ---
   static void _showSnackBar(BuildContext context, String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message, textAlign: TextAlign.right, style: const TextStyle(fontFamily: 'Cairo')),
         backgroundColor: isError ? Colors.red : Colors.blueGrey,
-        duration: const Duration(seconds: 1),
+        duration: const Duration(milliseconds: 1500),
       ),
     );
   }
@@ -168,4 +158,3 @@ try {
     );
   }
 }
-
