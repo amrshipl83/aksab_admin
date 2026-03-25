@@ -6,7 +6,8 @@ import 'dart:convert';
 import 'package:excel/excel.dart' as excel_lib;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart'; 
+// المكتبة دي هي اللي بتعمل المشكلة في الويب، فهنعمل استيراد مشروط
+import 'package:flutter_barcode_scanner/flutter_barcode_scanner.dart' if (dart.library.html) 'package:aksab_admin/widgets/barcode_stub.dart'; 
 import '../pages/products_report_page.dart';
 
 class ProductTab extends StatefulWidget {
@@ -48,14 +49,17 @@ class _ProductTabState extends State<ProductTab> {
     } catch (e) { return null; }
   }
 
+  // الدالة دي بقت محمية بـ kIsWeb
   void _openScanner() async {
     if (kIsWeb) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("برجاء استخدام مسدس الباركود أو الإدخال اليدوي (الكاميرا للموبايل فقط)"))
+        const SnackBar(content: Text("الباركود يدوي أو بمسدس ليزر في الويب"))
       );
       return;
     }
+    
     try {
+      // السطر ده هيتنفذ بس لو مش ويب (على الموبايل)
       String barcodeScanRes = await FlutterBarcodeScanner.scanBarcode(
         "#ff6666", "إلغاء", true, ScanMode.BARCODE
       );
@@ -68,6 +72,7 @@ class _ProductTabState extends State<ProductTab> {
     }
   }
 
+  // --- بقية الدوال (إكسل وحفظ المنتج) هي هي ---
   Future<void> _importFromExcel() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom, allowedExtensions: ['xlsx'],
@@ -197,19 +202,6 @@ class _ProductTabState extends State<ProductTab> {
             controller: _nameController,
             textAlign: TextAlign.right,
             decoration: const InputDecoration(labelText: "اسم المنتج", border: OutlineInputBorder()),
-          ),
-          const SizedBox(height: 10),
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance.collection('mainCategory').snapshots(),
-            builder: (context, snapshot) {
-              return DropdownButtonFormField<String>(
-                value: selectedMainId,
-                hint: const Text("القسم الرئيسي"),
-                isExpanded: true,
-                items: snapshot.data?.docs.map((doc) => DropdownMenuItem(value: doc.id, child: Text(doc['name'], textAlign: TextAlign.right))).toList(),
-                onChanged: (val) => setState(() { selectedMainId = val; selectedSubId = null; }),
-              );
-            },
           ),
           const SizedBox(height: 20),
           const Text("صور المنتج", style: TextStyle(fontWeight: FontWeight.bold)),
