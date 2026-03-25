@@ -14,20 +14,28 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
   String? selectedMainId;
   String? selectedStatus;
   final TextEditingController _searchController = TextEditingController();
+  
+  // خرائط لتخزين الأسماء بدلاً من الـ IDs
   Map<String, String> mainCategoriesNames = {};
+  Map<String, String> subCategoriesNames = {};
+  Map<String, String> manufacturersNames = {};
 
   @override
   void initState() {
     super.initState();
-    _loadCategoryNames();
+    _loadAllMetadata();
   }
 
-  Future<void> _loadCategoryNames() async {
+  // تحميل البيانات المساعدة لربط الأسماء بالـ IDs في الإكسل والـ UI
+  Future<void> _loadAllMetadata() async {
     final mainSnap = await FirebaseFirestore.instance.collection('mainCategory').get();
+    final subSnap = await FirebaseFirestore.instance.collection('subCategory').get();
+    final mfgSnap = await FirebaseFirestore.instance.collection('manufacturers').get();
+    
     setState(() {
-      for (var doc in mainSnap.docs) {
-        mainCategoriesNames[doc.id] = doc['name'];
-      }
+      for (var doc in mainSnap.docs) mainCategoriesNames[doc.id] = doc['name'];
+      for (var doc in subSnap.docs) subCategoriesNames[doc.id] = doc['name'];
+      for (var doc in mfgSnap.docs) manufacturersNames[doc.id] = doc['name'];
     });
   }
 
@@ -36,31 +44,50 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
       var excel = Excel.createExcel();
       Sheet sheetObject = excel['Products'];
 
-      // التعديل هنا: استخدام TextCellValue بدلاً من String مباشرة
+      // وضع العناوين بنفس ترتيب الـ Import (A to G)
       sheetObject.appendRow([
-        TextCellValue('اسم المنتج'),
-        TextCellValue('القسم الرئيسي'),
-        TextCellValue('الحالة'),
+        TextCellValue('اسم المنتج'),      // Column A (Index 0)
+        TextCellValue('الباركود'),        // Column B (1)
+        TextCellValue('الوصف'),          // Column C (2)
+        TextCellValue('القسم الرئيسي'),    // Column D (3)
+        TextCellValue('القسم الفرعي'),     // Column E (4)
+        TextCellValue('الشركة المصنعة'),   // Column F (5)
+        TextCellValue('الوحدات والمعامل'), // Column G (6)
       ]);
 
       for (var doc in docs) {
         var data = doc.data() as Map<String, dynamic>;
+        
+        // تحويل قائمة الوحدات من Map إلى نص بصيغة (قطعة:1,كرتونة:12)
+        String unitsString = "";
+        if (data['unitsWithFactors'] != null) {
+          unitsString = (data['unitsWithFactors'] as List)
+              .map((u) => "${u['unitName']}:${u['subQty']}")
+              .join(",");
+        }
+
         sheetObject.appendRow([
           TextCellValue(data['name'] ?? ''),
+          TextCellValue(data['barcode'] ?? ''),
+          TextCellValue(data['description'] ?? ''),
           TextCellValue(mainCategoriesNames[data['mainId']] ?? 'غير معروف'),
-          TextCellValue(data['status'] == 'active' ? 'نشط' : 'غير نشط'),
+          TextCellValue(subCategoriesNames[data['subId']] ?? 'غير معروف'),
+          TextCellValue(manufacturersNames[data['manufacturerId']] ?? 'غير معروف'),
+          TextCellValue(unitsString),
         ]);
       }
 
       if (kIsWeb) {
-        // في الويب يتم التحميل مباشرة عبر المتصفح
-        excel.save(fileName: "products_report.xlsx");
+        excel.save(fileName: "Rabia_Ahla_Inventory.xlsx");
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("جاري تحميل ملف الإكسل...")),
+          const SnackBar(content: Text("تم استخراج التقرير بنجاح، جاري التحميل...")),
         );
       }
     } catch (e) {
-      debugPrint("Excel Error: $e");
+      debugPrint("Excel Export Error: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("فشل استخراج ملف الإكسل")),
+      );
     }
   }
 
@@ -129,7 +156,7 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
             controller: _searchController,
             textAlign: TextAlign.right,
             decoration: InputDecoration(
-              hintText: "بحث بالاسم...",
+              hintText: "بحث بالاسم أو الباركود...",
               prefixIcon: const Icon(Icons.search),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
             ),
@@ -150,8 +177,15 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         var docs = snapshot.data!.docs;
+        
+        // البحث بالاسم أو الباركود
         if (_searchController.text.isNotEmpty) {
-          docs = docs.where((d) => d['name'].toString().toLowerCase().contains(_searchController.text.toLowerCase())).toList();
+          String search = _searchController.text.toLowerCase();
+          docs = docs.where((d) {
+            String name = (d['name'] ?? '').toString().toLowerCase();
+            String barcode = (d['barcode'] ?? '').toString().toLowerCase();
+            return name.contains(search) || barcode.contains(search);
+          }).toList();
         }
 
         return ListView.builder(
@@ -159,16 +193,17 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
           itemBuilder: (context, index) {
             final data = docs[index].data() as Map<String, dynamic>;
             final id = docs[index].id;
-            final imageUrl = (data['imageUrls'] != null && (data['imageUrls'] as List).isNotEmpty) ? data['imageUrls'][0] : '';
-
+            final imageUrl = (data['imageUrls'] != null && (data['imageUrls'] as List).isNotEmpty) 
+                ? data['imageUrls'][0] : '';
+            
             return Card(
               margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               child: ListTile(
-                leading: imageUrl != '' 
-                    ? Image.network(imageUrl, width: 50, height: 50, fit: BoxFit.cover) 
+                leading: imageUrl != ''
+                    ? Image.network(imageUrl, width: 50, height: 50, fit: BoxFit.cover)
                     : const Icon(Icons.image),
-                title: Text(data['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text(mainCategoriesNames[data['mainId']] ?? 'تحميل...'),
+                title: Text(data['name'] ?? 'بدون اسم', style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text("${mainCategoriesNames[data['mainId']] ?? '...'} | ${data['barcode'] ?? ''}"),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -206,7 +241,21 @@ class _ProductsReportPageState extends State<ProductsReportPage> {
   }
 
   Future<void> _deleteProduct(String id) async {
-    await FirebaseFirestore.instance.collection('products').doc(id).delete();
+    bool confirm = await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("تأكيد الحذف"),
+        content: const Text("هل أنت متأكد من حذف هذا المنتج نهائياً؟"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("إلغاء")),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red), child: const Text("حذف")),
+        ],
+      ),
+    ) ?? false;
+
+    if (confirm) {
+      await FirebaseFirestore.instance.collection('products').doc(id).delete();
+    }
   }
 }
 
