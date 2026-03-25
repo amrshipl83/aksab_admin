@@ -121,6 +121,7 @@ class _ProductTabState extends State<ProductTab> {
   }
 
   // دالة الاستيراد الذكية الجديدة
+    // استبدل الدالة القديمة بهذه الدالة تماماً
   Future<void> _importExcelWithImages() async {
     // 1. اختيار ملف الإكسل
     FilePickerResult? excelResult = await FilePicker.platform.pickFiles(
@@ -129,8 +130,11 @@ class _ProductTabState extends State<ProductTab> {
     );
     if (excelResult == null) return;
 
-    // 2. اختيار مجلد الصور (تحديد ملفات متعددة)
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("الآن اختر جميع صور المنتجات من الاستوديو")));
+    // 2. اختيار مجلد الصور
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("الآن اختر جميع صور المنتجات من الاستوديو"))
+    );
+    
     FilePickerResult? imagesResult = await FilePicker.platform.pickFiles(
       type: FileType.image,
       allowMultiple: true,
@@ -140,23 +144,25 @@ class _ProductTabState extends State<ProductTab> {
     setState(() => _isLoading = true);
 
     try {
-      // ✅ الكود الجديد المتوافق مع الـ UI
-await ExcelImportService.importWithImages(
-  context: context, // بنبعت الـ context بدلاً من الـ onProgress
-  excelFile: excelResult.files.first,
-  imageFiles: imagesResult.files,
-);
-
-          // يمكن مستقبلاً عمل ProgressDialog هنا
-        },
+      // ✅ المناداة الصحيحة المتوافقة مع التعديل الأخير في الـ Service
+      await ExcelImportService.importWithImages(
+        context: context, // بعتنا الكونتيكست للرسايل
+        excelFile: excelResult.files.first,
+        imageFiles: imagesResult.files,
       );
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم استيراد البيانات ورفع الصور بنجاح")));
+      
+      // نرجع نحدث الصفحة بعد الاستيراد
+      setState(() {}); 
+      
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ أثناء الاستيراد: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("خطأ أثناء الاستيراد: $e"))
+      );
     } finally {
       setState(() => _isLoading = false);
     }
   }
+
 
   void _resetForm() {
     _nameController.clear();
