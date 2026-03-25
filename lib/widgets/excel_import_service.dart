@@ -24,13 +24,13 @@ class ExcelImportService {
       for (var table in excel.tables.keys) {
         var rows = excel.tables[table]!.rows;
         
-        // نبدأ من الصف الثاني (i=1) لتجاهل العناوين
+        // البدء من الصف الثاني لتخطي العناوين
         for (var i = 1; i < rows.length; i++) {
           var row = rows[i];
           
           String name = row[0]?.value?.toString() ?? "";
           
-          // تنظيف الباركود من أي تنسيق رقمي زائد (مثل .0) وضمان أنه نص نقي
+          // تنظيف الباركود من أي زوائد عشرية ناتجة عن الإكسل
           String rawBarcode = row[1]?.value?.toString() ?? "";
           String barcode = rawBarcode.split('.').first.trim();
           
@@ -38,14 +38,12 @@ class ExcelImportService {
 
           _showSnackBar(context, "جاري معالجة: $name");
 
-          // الربط بالترتيب: أول منتج يأخذ أول صورة مختارة وهكذا
+          // الربط بالترتيب (Index Mapping) لتفادي تغير أسماء الملفات في الأندرويد
           PlatformFile? matchedImage;
           int imageIndex = i - 1; 
 
           if (imageIndex < imageFiles.length) {
             matchedImage = imageFiles[imageIndex];
-          } else {
-            _showSnackBar(context, "⚠️ لا توجد صورة لمنتج: $name", isError: true);
           }
 
           List<String> urls = [];
@@ -59,16 +57,16 @@ class ExcelImportService {
             }
           }
 
-          // معالجة الوحدات
+          // معالجة الوحدات وفصلها للشكل القديم والجديد
           String unitsRaw = row[6]?.value?.toString() ?? "قطعة:1";
           List<Map<String, dynamic>> parsedUnits = _parseUnits(unitsRaw);
 
-          // تحويل المصفوفة للشكل القديم (unitName فقط) لضمان توافق التطبيقات الحالية
+          // الشكل القديم: [{unitName: "زجاجة"}, {unitName: "كرتونة"}]
           List<Map<String, dynamic>> oldStyleUnits = parsedUnits.map((u) => {
             'unitName': u['unitName']
           }).toList();
 
-          // إضافة البيانات لفايربيز مع الالتزام بكافة الحقول المطلوبة
+          // إضافة البيانات لـ Firestore
           await FirebaseFirestore.instance.collection('products').add({
             'name': name.trim(),
             'barcode': barcode,
@@ -77,19 +75,19 @@ class ExcelImportService {
             'subId': await _getIdByName('subCategory', row[4]?.value?.toString() ?? ""),
             'manufacturerId': await _getIdByName('manufacturers', row[5]?.value?.toString() ?? ""),
             'status': 'active',
-            'order': 0, // إضافة حقل الترتيب الافتراضي
+            'order': 0,
             'imageUrls': urls,
             'imagePublicIds': publicIds,
-            'units': oldStyleUnits, // الشكل القديم للتوافق
-            'unitsWithFactors': parsedUnits, // الشكل الجديد للحسابات اللوجستية
+            'units': oldStyleUnits, // الحقل القديم المطلوب
+            'unitsWithFactors': parsedUnits, // الحقل الجديد للعمليات اللوجستية
             'createdAt': FieldValue.serverTimestamp(),
           });
           
-          // تأخير بسيط لتجنب الضغط على الـ API أثناء الرفع المتتابع
+          // تأخير بسيط لضمان استقرار عمليات الرفع
           await Future.delayed(const Duration(milliseconds: 500));
         }
       }
-      _showDialog(context, "تمت العملية", "تم استيراد المنتجات ورفع الصور وربط الوحدات بنجاح ✅");
+      _showDialog(context, "تمت العملية", "تم الاستيراد بنجاح وتحديث كافة حقول الوحدات ✅");
     } catch (e) {
       _showDialog(context, "خطأ في الاستيراد", e.toString());
     }
@@ -120,7 +118,6 @@ class ExcelImportService {
         };
       }
     } catch (e) {
-      debugPrint("Cloudinary Upload Error: $e");
       return null;
     }
     return null;
@@ -142,7 +139,6 @@ class ExcelImportService {
   static List<Map<String, dynamic>> _parseUnits(String raw) {
     List<Map<String, dynamic>> list = [];
     try {
-      // يتوقع صيغة مثل "قطعة:1,كرتونة:12"
       for (var u in raw.split(',')) {
         var parts = u.trim().split(':');
         if (parts.isNotEmpty && parts[0].isNotEmpty) {
@@ -172,12 +168,12 @@ class ExcelImportService {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(title, textAlign: TextAlign.right, style: const TextStyle(fontFamily: 'Cairo')),
-        content: Text(msg, textAlign: TextAlign.right, style: const TextStyle(fontFamily: 'Cairo')),
+        title: Text(title, textAlign: TextAlign.right),
+        content: Text(msg, textAlign: TextAlign.right),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx), 
-            child: const Text("تم", style: TextStyle(fontFamily: 'Cairo'))
+            child: const Text("تم")
           )
         ],
       ),
