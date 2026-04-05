@@ -132,7 +132,7 @@ class _RevenueScreenState extends State<RevenueScreen> {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('deliverySupermarkets')
-          .where('awaiting_verification', '>', 0)
+          .where('awaiting_verification', isGreaterThan: 0)
           .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
