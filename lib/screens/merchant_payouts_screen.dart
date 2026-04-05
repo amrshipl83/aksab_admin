@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class MerchantPayoutsScreen extends StatefulWidget {
   static const String routeName = '/merchant-payouts';
-  const MerchantPayoutsScreen({super.key}); // إضافة الـ Key لضمان الاستقرار
+  const MerchantPayoutsScreen({super.key});
 
   @override
   _MerchantPayoutsScreenState createState() => _MerchantPayoutsScreenState();
@@ -50,18 +50,25 @@ class _MerchantPayoutsScreenState extends State<MerchantPayoutsScreen> {
       builder: (context, snapshot) {
         double totalDebt = 0;
         int activeMerchants = 0;
-        if (snapshot.hasData) {
+        
+        if (snapshot.hasData && snapshot.data != null) {
           for (var doc in snapshot.data!.docs) {
             try {
-              final data = doc.data() as Map<String, dynamic>;
-              double val = (data['awaiting_verification'] ?? 0).toDouble();
+              final data = doc.data() as Map<String, dynamic>?;
+              if (data == null) continue;
+              
+              // تأمين قراءة الرقم بمرونة (int أو double)
+              num val = data['awaiting_verification'] ?? 0;
               if (val > 0) {
-                totalDebt += val;
+                totalDebt += val.toDouble();
                 activeMerchants++;
               }
-            } catch (e) { continue; }
+            } catch (e) {
+              debugPrint("Error parsing summary doc: $e");
+            }
           }
         }
+        
         return Row(
           children: [
             _statCard("إجمالي الأمانات المستحقة", "${totalDebt.toStringAsFixed(2)} ج.م", Icons.monetization_on, Colors.orange),
@@ -89,32 +96,33 @@ class _MerchantPayoutsScreenState extends State<MerchantPayoutsScreen> {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueGrey[800])),
           ),
           StreamBuilder<QuerySnapshot>(
-            // تعديل: شلنا الـ .where عشان نمنع الشاشة الرصاصي
             stream: FirebaseFirestore.instance.collection('deliverySupermarkets').snapshots(),
             builder: (context, snapshot) {
-              if (snapshot.hasError) return Center(child: Text("خطأ: ${snapshot.error}"));
+              if (snapshot.hasError) return Center(child: Text("حدث خطأ في البيانات"));
               if (!snapshot.hasData) return const LinearProgressIndicator();
 
-              // فلترة يدوية آمنة للويب
-              final allDocs = snapshot.data!.docs;
-              final filteredDocs = allDocs.where((doc) {
-                final data = doc.data() as Map<String, dynamic>;
-                final val = data['awaiting_verification'] ?? 0;
-                return (val is num && val > 0);
+              // فلترة يدوية مؤمنة ضد الـ Null والـ Types
+              final filteredDocs = snapshot.data!.docs.where((doc) {
+                try {
+                  final data = doc.data() as Map<String, dynamic>?;
+                  if (data == null) return false;
+                  final val = data['awaiting_verification'];
+                  return (val is num && val > 0);
+                } catch (e) {
+                  return false;
+                }
               }).toList();
 
               if (filteredDocs.isEmpty) {
                 return const Padding(
                   padding: EdgeInsets.all(40.0),
-                  child: Center(child: Text("لا يوجد مستحقات حالياً - السيستم نظيف ✅")),
+                  child: Center(child: Text("لا يوجد مستحقات حالياً ✅")),
                 );
               }
 
               return SingleChildScrollView(
-                scrollDirection: Axis.horizontal, // مهم جداً للويب عشان الجدول ميكسرش
+                scrollDirection: Axis.horizontal,
                 child: DataTable(
-                  headingRowHeight: 60,
-                  headingTextStyle: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blueGrey),
                   columns: const [
                     DataColumn(label: Text('المعرف')),
                     DataColumn(label: Text('السوبر ماركت')),
@@ -124,19 +132,16 @@ class _MerchantPayoutsScreenState extends State<MerchantPayoutsScreen> {
                   ],
                   rows: filteredDocs.map((doc) {
                     final data = doc.data() as Map<String, dynamic>;
+                    final amount = data['awaiting_verification'] ?? 0;
+                    
                     return DataRow(cells: [
-                      DataCell(Text(doc.id.substring(0, 5), style: const TextStyle(color: Colors.grey))),
-                      DataCell(Text(data['supermarketName'] ?? 'غير معروف', style: const TextStyle(fontWeight: FontWeight.bold))),
-                      DataCell(Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(20)),
-                        child: Text("${data['awaiting_verification']} ج.م", style: TextStyle(color: Colors.red[700], fontWeight: FontWeight.bold)),
-                      )),
+                      DataCell(Text(doc.id.length > 5 ? doc.id.substring(0, 5) : doc.id)),
+                      DataCell(Text(data['supermarketName']?.toString() ?? 'غير معروف')),
+                      DataCell(Text("$amount ج.م", style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
                       DataCell(Text(_formatDate(data['updatedAt']))),
                       DataCell(ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green[600]),
-                        onPressed: () => _confirmPayment(doc.id, data['supermarketName'] ?? 'مورد', data['awaiting_verification']),
-                        child: const Text("تأكيد السداد", style: TextStyle(color: Colors.white)),
+                        onPressed: () => _confirmPayment(doc.id, data['supermarketName']?.toString() ?? 'مورد', amount),
+                        child: const Text("تأكيد السداد"),
                       )),
                     ]);
                   }).toList(),
@@ -149,22 +154,14 @@ class _MerchantPayoutsScreenState extends State<MerchantPayoutsScreen> {
     );
   }
 
+  // --- دوال المساعدة المؤمّنة ---
+  
   void _confirmPayment(String mId, String mName, dynamic amount) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Row(children: [Icon(Icons.warning_amber_rounded, color: Colors.orange), SizedBox(width: 10), Text("تأكيد سداد")]),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text("هل استلمت الأمانات فعلياً من:"),
-            Text(mName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.blue)),
-            const SizedBox(height: 10),
-            Text("المبلغ: $amount ج.م", style: const TextStyle(fontSize: 16)),
-          ],
-        ),
+        title: const Text("تأكيد سداد"),
+        content: Text("هل استلمت $amount ج.م من $mName؟"),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("تراجع")),
           ElevatedButton(
@@ -174,7 +171,7 @@ class _MerchantPayoutsScreenState extends State<MerchantPayoutsScreen> {
               await _sendToEC2(mId, mName, amount);
               setState(() => _isProcessing = false);
             },
-            child: const Text("نعم، تم"),
+            child: const Text("تم السداد"),
           )
         ],
       ),
@@ -188,16 +185,11 @@ class _MerchantPayoutsScreenState extends State<MerchantPayoutsScreen> {
         'merchantName': name,
         'amount': (amt as num).toDouble(),
         'status': 'pending',
-        'method': 'Cash_Payment',
         'createdAt': FieldValue.serverTimestamp(),
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ تم إرسال أمر التسوية..")));
-      }
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ تم الإرسال")));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("❌ خطأ: $e"), backgroundColor: Colors.red));
-      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("❌ خطأ: $e")));
     }
   }
 
@@ -205,14 +197,18 @@ class _MerchantPayoutsScreenState extends State<MerchantPayoutsScreen> {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.3))),
+        decoration: BoxDecoration(
+          color: Colors.white, 
+          borderRadius: BorderRadius.circular(12), 
+          border: Border.all(color: color.withOpacity(0.2))
+        ),
         child: Row(
           children: [
-            CircleAvatar(backgroundColor: color.withOpacity(0.1), child: Icon(icon, color: color)),
-            const SizedBox(width: 15),
+            Icon(icon, color: color),
+            const SizedBox(width: 10),
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(title, style: const TextStyle(color: Colors.grey, fontSize: 14)),
-              Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              Text(title, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ])
           ],
         ),
@@ -221,11 +217,9 @@ class _MerchantPayoutsScreenState extends State<MerchantPayoutsScreen> {
   }
 
   String _formatDate(dynamic ts) {
-    if (ts == null) return "-";
     if (ts is Timestamp) {
-      var d = ts.toDate();
-      return "${d.day}/${d.month}";
+      return "${ts.toDate().day}/${ts.toDate().month}";
     }
-    return ts.toString();
+    return "-";
   }
 }
