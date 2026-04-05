@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../controllers/revenue_controller.dart';
 import 'package:intl/intl.dart';
-import 'merchant_payouts_screen.dart'; // تأكد من استيراد صفحة السداد
+import 'merchant_payouts_screen.dart'; 
 
 class RevenueScreen extends StatefulWidget {
   const RevenueScreen({super.key});
@@ -47,19 +47,13 @@ class _RevenueScreenState extends State<RevenueScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // قسم الكروت المحدثة
                   _buildEnhancedSummaryCards(revenueProvider, isMobile),
                   const SizedBox(height: 30),
-                  
-                  // جدول المستحقات السريع
                   const Text("مستحقات بانتظار التسوية (أمانات)",
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFFB21F2D))),
                   const SizedBox(height: 10),
                   _buildPayoutQueueTable(isMobile),
-                  
                   const SizedBox(height: 40),
-                  
-                  // سجل العمليات الإلكترونية
                   const Text("سجل الدفع الإلكتروني (Paid)",
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2D3436))),
                   const SizedBox(height: 15),
@@ -96,7 +90,7 @@ class _RevenueScreenState extends State<RevenueScreen> {
             _statCard("رسوم مناديب", provider.totalOperationalFees, Icons.delivery_dining, Colors.orange),
             _statCard("شحن محافظ", provider.totalWalletTopups, Icons.wallet, Colors.purple),
             
-            // كارت مستحقات الديفيرى - ينقلك لصفحة السداد عند الضغط
+            // الكارت المطلوب (تم حذف const من Navigator)
             _statCard(
               "مستحقات ديفيرى", 
               totalAwaiting, 
@@ -105,7 +99,7 @@ class _RevenueScreenState extends State<RevenueScreen> {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const MerchantPayoutsScreen()),
+                  MaterialPageRoute(builder: (context) => MerchantPayoutsScreen()),
                 );
               },
             ),
@@ -135,11 +129,7 @@ class _RevenueScreenState extends State<RevenueScreen> {
 
         return Container(
           width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.white, 
-            borderRadius: BorderRadius.circular(15), 
-            border: Border.all(color: Colors.red.withOpacity(0.1))
-          ),
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.red.withOpacity(0.1))),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: DataTable(
@@ -236,7 +226,7 @@ class _RevenueScreenState extends State<RevenueScreen> {
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: DataTable(
-          headingRowColor: MaterialStateProperty.all(Colors.grey[50]),
+          headingRowColor: MaterialStateProperty.resolveWith((states) => Colors.grey[50]),
           columns: const [
             DataColumn(label: Text('الجهة')),
             DataColumn(label: Text('النوع')),
