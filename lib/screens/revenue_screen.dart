@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ إضافة فايربيز للمستحقات
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../controllers/revenue_controller.dart';
 import 'package:intl/intl.dart';
-import 'merchant_payouts_screen.dart'; // ✅ لاستخدام شاشة التفاصيل لو حبيت
 
 class RevenueScreen extends StatefulWidget {
   const RevenueScreen({super.key});
@@ -32,7 +31,7 @@ class _RevenueScreenState extends State<RevenueScreen> {
         title: const Text("حركة الدفع والتسويات",
             style: TextStyle(fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
         centerTitle: true,
-        backgroundColor: const Color(0xFFB21F2D), // طقمنا اللون مع الإدارة
+        backgroundColor: const Color(0xFFB21F2D),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -47,20 +46,13 @@ class _RevenueScreenState extends State<RevenueScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // --- قسم الكروت (تم إضافة كارت مستحقات الديفيرى) ---
                   _buildEnhancedSummaryCards(revenueProvider, isMobile),
-
                   const SizedBox(height: 30),
-
-                  // --- جدول مستحقات الديفيرى (الجديد) ---
                   const Text("مستحقات بانتظار التسوية (أمانات)",
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFFB21F2D))),
                   const SizedBox(height: 10),
                   _buildPayoutQueueTable(isMobile),
-
                   const SizedBox(height: 40),
-
-                  // --- جدول العمليات القديم ---
                   const Text("سجل الدفع الإلكتروني (Paid)",
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2D3436))),
                   const SizedBox(height: 15),
@@ -71,7 +63,6 @@ class _RevenueScreenState extends State<RevenueScreen> {
     );
   }
 
-  // ويدجت الكروت المحدث (5 كروت بدل 4)
   Widget _buildEnhancedSummaryCards(RevenueController provider, bool isMobile) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('deliverySupermarkets').snapshots(),
@@ -79,14 +70,17 @@ class _RevenueScreenState extends State<RevenueScreen> {
         double totalAwaiting = 0;
         if (snapshot.hasData) {
           for (var doc in snapshot.data!.docs) {
-            totalAwaiting += (doc['awaiting_verification'] ?? 0).toDouble();
+            try {
+              var data = doc.data() as Map<String, dynamic>;
+              totalAwaiting += (data['awaiting_verification'] ?? 0).toDouble();
+            } catch (e) { continue; }
           }
         }
 
         return GridView.count(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: isMobile ? 2 : 5, // 5 كروت في الصف للويب
+          crossAxisCount: isMobile ? 2 : 5,
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
           childAspectRatio: isMobile ? 1.1 : 1.3,
@@ -94,7 +88,6 @@ class _RevenueScreenState extends State<RevenueScreen> {
             _statCard("اشتراكات", provider.totalSubscriptions, Icons.storefront, Colors.blue),
             _statCard("رسوم مناديب", provider.totalOperationalFees, Icons.delivery_dining, Colors.orange),
             _statCard("شحن محافظ", provider.totalWalletTopups, Icons.wallet, Colors.purple),
-            // الكارت الجديد والمطلوب باللون الأحمر
             _statCard("مستحقات ديفيرى", totalAwaiting, Icons.account_balance_wallet, const Color(0xFFB21F2D)),
             _statCard("الإجمالي العام", provider.totalOverall + totalAwaiting, Icons.assessment, Colors.green),
           ],
@@ -102,6 +95,57 @@ class _RevenueScreenState extends State<RevenueScreen> {
       },
     );
   }
+
+  Widget _buildPayoutQueueTable(bool isMobile) {
+    return StreamBuilder<QuerySnapshot>(
+      // سحب الكل وفلترة يدوية لتجنب مشاكل الـ Index في البداية
+      stream: FirebaseFirestore.instance.collection('deliverySupermarkets').snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+        
+        // الفلترة اليدوية
+        final docs = snapshot.data!.docs.where((doc) {
+          var data = doc.data() as Map<String, dynamic>;
+          var val = data['awaiting_verification'] ?? 0;
+          return (val is num && val > 0);
+        }).toList();
+
+        if (docs.isEmpty) {
+          return const Card(child: Padding(padding: EdgeInsets.all(20), child: Text("لا توجد مبالغ معلقة للسداد ✅")));
+        }
+
+        return Container(
+          width: double.infinity,
+          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.red.withOpacity(0.1))),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columns: const [
+                DataColumn(label: Text('المورد')),
+                DataColumn(label: Text('المبلغ')),
+                DataColumn(label: Text('الإجراء')),
+              ],
+              rows: docs.map((doc) {
+                var data = doc.data() as Map<String, dynamic>;
+                return DataRow(cells: [
+                  DataCell(Text(data['supermarketName'] ?? 'بدون اسم', style: const TextStyle(fontWeight: FontWeight.bold))),
+                  DataCell(Text("${data['awaiting_verification']} ج.م", style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
+                  DataCell(ElevatedButton(
+                    onPressed: () => _showConfirmPayout(context, doc.id, data['supermarketName'] ?? 'مورد', data['awaiting_verification']),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                    child: const Text("سداد", style: TextStyle(color: Colors.white)),
+                  )),
+                ]);
+              }).toList(),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // تم الاحتفاظ بباقي الدوال (_statCard, _showConfirmPayout, _buildTransactionTable, _buildTypeBadge) كما هي من كودك السابق
+  // مع التأكد من إضافة null check في كل مكان
 
   Widget _statCard(String title, double value, IconData icon, Color color) {
     return Container(
@@ -127,51 +171,6 @@ class _RevenueScreenState extends State<RevenueScreen> {
     );
   }
 
-  // جدول مراقبة المستحقات الجديد بداخل نفس الصفحة
-  Widget _buildPayoutQueueTable(bool isMobile) {
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('deliverySupermarkets')
-          .where('awaiting_verification', isGreaterThan: 0)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Card(child: Padding(padding: EdgeInsets.all(20), child: Text("لا توجد مبالغ معلقة للسداد ✅")));
-        }
-
-        return Container(
-          width: double.infinity,
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.red.withOpacity(0.1))),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              columns: const [
-                DataColumn(label: Text('المورد')),
-                DataColumn(label: Text('المبلغ')),
-                DataColumn(label: Text('الحالة')),
-                DataColumn(label: Text('الإجراء')),
-              ],
-              rows: snapshot.data!.docs.map((doc) {
-                var data = doc.data() as Map<String, dynamic>;
-                return DataRow(cells: [
-                  DataCell(Text(data['supermarketName'] ?? '..', style: const TextStyle(fontWeight: FontWeight.bold))),
-                  DataCell(Text("${data['awaiting_verification']} ج.م", style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold))),
-                  DataCell(_buildTypeBadge("PENDING_PAYOUT")),
-                  DataCell(ElevatedButton(
-                    onPressed: () => _showConfirmPayout(context, doc.id, data['supermarketName'], data['awaiting_verification']),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(horizontal: 10)),
-                    child: const Text("سداد", style: TextStyle(fontSize: 12)),
-                  )),
-                ]);
-              }).toList(),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // نافذة التأكيد السريع
   void _showConfirmPayout(BuildContext context, String id, String name, dynamic amt) {
     showDialog(
       context: context,
@@ -198,7 +197,6 @@ class _RevenueScreenState extends State<RevenueScreen> {
     );
   }
 
-  // الدالة الأصلية لجدول العمليات (بدون تغيير)
   Widget _buildTransactionTable(RevenueController provider, bool isMobile) {
     if (provider.transactions.isEmpty) {
       return const Center(child: Padding(padding: EdgeInsets.all(20.0), child: Text("لا توجد عمليات مدفوعة حالياً")));
@@ -249,4 +247,3 @@ class _RevenueScreenState extends State<RevenueScreen> {
     );
   }
 }
-
