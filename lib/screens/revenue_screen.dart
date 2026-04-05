@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../controllers/revenue_controller.dart';
 import 'package:intl/intl.dart';
+import 'merchant_payouts_screen.dart'; // تأكد من استيراد صفحة السداد
 
 class RevenueScreen extends StatefulWidget {
   const RevenueScreen({super.key});
@@ -46,13 +47,19 @@ class _RevenueScreenState extends State<RevenueScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // قسم الكروت المحدثة
                   _buildEnhancedSummaryCards(revenueProvider, isMobile),
                   const SizedBox(height: 30),
+                  
+                  // جدول المستحقات السريع
                   const Text("مستحقات بانتظار التسوية (أمانات)",
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFFB21F2D))),
                   const SizedBox(height: 10),
                   _buildPayoutQueueTable(isMobile),
+                  
                   const SizedBox(height: 40),
+                  
+                  // سجل العمليات الإلكترونية
                   const Text("سجل الدفع الإلكتروني (Paid)",
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2D3436))),
                   const SizedBox(height: 15),
@@ -88,7 +95,21 @@ class _RevenueScreenState extends State<RevenueScreen> {
             _statCard("اشتراكات", provider.totalSubscriptions, Icons.storefront, Colors.blue),
             _statCard("رسوم مناديب", provider.totalOperationalFees, Icons.delivery_dining, Colors.orange),
             _statCard("شحن محافظ", provider.totalWalletTopups, Icons.wallet, Colors.purple),
-            _statCard("مستحقات ديفيرى", totalAwaiting, Icons.account_balance_wallet, const Color(0xFFB21F2D)),
+            
+            // كارت مستحقات الديفيرى - ينقلك لصفحة السداد عند الضغط
+            _statCard(
+              "مستحقات ديفيرى", 
+              totalAwaiting, 
+              Icons.account_balance_wallet, 
+              const Color(0xFFB21F2D),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const MerchantPayoutsScreen()),
+                );
+              },
+            ),
+            
             _statCard("الإجمالي العام", provider.totalOverall + totalAwaiting, Icons.assessment, Colors.green),
           ],
         );
@@ -98,12 +119,10 @@ class _RevenueScreenState extends State<RevenueScreen> {
 
   Widget _buildPayoutQueueTable(bool isMobile) {
     return StreamBuilder<QuerySnapshot>(
-      // سحب الكل وفلترة يدوية لتجنب مشاكل الـ Index في البداية
       stream: FirebaseFirestore.instance.collection('deliverySupermarkets').snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
         
-        // الفلترة اليدوية
         final docs = snapshot.data!.docs.where((doc) {
           var data = doc.data() as Map<String, dynamic>;
           var val = data['awaiting_verification'] ?? 0;
@@ -116,7 +135,11 @@ class _RevenueScreenState extends State<RevenueScreen> {
 
         return Container(
           width: double.infinity,
-          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.red.withOpacity(0.1))),
+          decoration: BoxDecoration(
+            color: Colors.white, 
+            borderRadius: BorderRadius.circular(15), 
+            border: Border.all(color: Colors.red.withOpacity(0.1))
+          ),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: DataTable(
@@ -144,29 +167,35 @@ class _RevenueScreenState extends State<RevenueScreen> {
     );
   }
 
-  // تم الاحتفاظ بباقي الدوال (_statCard, _showConfirmPayout, _buildTransactionTable, _buildTypeBadge) كما هي من كودك السابق
-  // مع التأكد من إضافة null check في كل مكان
-
-  Widget _statCard(String title, double value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: color.withOpacity(0.2), width: 1),
-        boxShadow: [BoxShadow(color: color.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 4))],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: color, size: 26),
-          const SizedBox(height: 8),
-          Text(title, style: TextStyle(color: Colors.grey[600], fontSize: 11, fontFamily: 'Cairo')),
-          FittedBox(
-            child: Text("${value.toStringAsFixed(0)} ج.م",
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: color)),
-          ),
-        ],
+  Widget _statCard(String title, double value, IconData icon, Color color, {VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(15),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: color.withOpacity(0.2), width: 1),
+          boxShadow: [BoxShadow(color: color.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 4))],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: color, size: 26),
+            const SizedBox(height: 8),
+            Text(title, style: TextStyle(color: Colors.grey[600], fontSize: 11, fontFamily: 'Cairo')),
+            FittedBox(
+              child: Text("${value.toStringAsFixed(0)} ج.م",
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: color)),
+            ),
+            if (onTap != null)
+              const Padding(
+                padding: EdgeInsets.only(top: 4.0),
+                child: Icon(Icons.touch_app, size: 12, color: Colors.grey),
+              ),
+          ],
+        ),
       ),
     );
   }
