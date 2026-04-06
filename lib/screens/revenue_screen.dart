@@ -46,11 +46,9 @@ class _RevenueScreenState extends State<RevenueScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // --- قسم الكروت الإحصائية ---
                   _buildEnhancedSummaryCards(revenueProvider, isMobile),
                   const SizedBox(height: 30),
 
-                  // --- جدول مستحقات الموردين (Merchants) ---
                   const Text("مستحقات الموردين (أمانات بانتظار التحصيل)",
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFFB21F2D), fontFamily: 'Cairo')),
                   const SizedBox(height: 10),
@@ -58,15 +56,14 @@ class _RevenueScreenState extends State<RevenueScreen> {
 
                   const SizedBox(height: 40),
 
-                  // --- جدول سحوبات المناديب (Drivers) الجديد ---
-                  const Text("طلبات سحب المناديب (أرباح جاهزة للصرف)",
+                  // ✅ تم إزالة const من هنا لأن اللون orange[900] ديناميكي
+                  Text("طلبات سحب المناديب (أرباح جاهزة للصرف)",
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orange[900], fontFamily: 'Cairo')),
                   const SizedBox(height: 10),
                   _buildWithdrawRequestsTable(isMobile),
 
                   const SizedBox(height: 40),
 
-                  // --- سجل العمليات العام ---
                   const Text("سجل الدفع الإلكتروني المكتمل",
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2D3436), fontFamily: 'Cairo')),
                   const SizedBox(height: 15),
@@ -77,7 +74,6 @@ class _RevenueScreenState extends State<RevenueScreen> {
     );
   }
 
-  // الكروت الإحصائية المحدثة
   Widget _buildEnhancedSummaryCards(RevenueController provider, bool isMobile) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance.collection('deliverySupermarkets').snapshots(),
@@ -131,12 +127,12 @@ class _RevenueScreenState extends State<RevenueScreen> {
     );
   }
 
-  // جدول الموردين
   Widget _buildPayoutQueueTable(bool isMobile) {
     return StreamBuilder<QuerySnapshot>(
+      // ✅ تعديل الـ Query لتتوافق مع إصدار Firebase الجديد
       stream: FirebaseFirestore.instance
           .collection('deliverySupermarkets')
-          .where('awaiting_verification', '>', 0)
+          .where('awaiting_verification', isGreaterThan: 0)
           .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -172,12 +168,12 @@ class _RevenueScreenState extends State<RevenueScreen> {
     );
   }
 
-  // جدول المناديب (الجديد)
   Widget _buildWithdrawRequestsTable(bool isMobile) {
     return StreamBuilder<QuerySnapshot>(
+      // ✅ تعديل الـ Query لتتوافق مع إصدار Firebase الجديد
       stream: FirebaseFirestore.instance
           .collection('withdrawRequests')
-          .where('status', '==', 'pending')
+          .where('status', isEqualTo: 'pending')
           .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -198,7 +194,8 @@ class _RevenueScreenState extends State<RevenueScreen> {
                 var data = doc.data() as Map<String, dynamic>;
                 return DataRow(cells: [
                   DataCell(Text(data['driverName'] ?? 'مندوب اكسب', style: const TextStyle(fontWeight: FontWeight.bold))),
-                  DataCell(Text("${data['amount']} ج.م", style: const TextStyle(color: Colors.orange[800], fontWeight: FontWeight.bold))),
+                  // ✅ تم إزالة const من TextStyle بسبب استخدام orange[800]
+                  DataCell(Text("${data['amount']} ج.م", style: TextStyle(color: Colors.orange[800], fontWeight: FontWeight.bold))),
                   DataCell(ElevatedButton(
                     onPressed: () => _showConfirmWithdraw(context, doc.id, data['driverName'] ?? 'المندوب', data['amount']),
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800]),
@@ -213,7 +210,6 @@ class _RevenueScreenState extends State<RevenueScreen> {
     );
   }
 
-  // نافذة سداد الموردين
   void _showConfirmPayout(BuildContext context, String id, String name, dynamic amt) {
     String selectedMethod = 'نقدي';
     showDialog(
@@ -256,7 +252,6 @@ class _RevenueScreenState extends State<RevenueScreen> {
     );
   }
 
-  // نافذة صرف المناديب
   void _showConfirmWithdraw(BuildContext context, String docId, String name, dynamic amt) {
     String selectedMethod = 'فودافون كاش';
     showDialog(
