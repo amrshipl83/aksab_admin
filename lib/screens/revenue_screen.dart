@@ -56,7 +56,6 @@ class _RevenueScreenState extends State<RevenueScreen> {
 
                   const SizedBox(height: 40),
 
-                  // ✅ تم إزالة const من هنا لأن اللون orange[900] ديناميكي
                   Text("طلبات سحب المناديب (أرباح جاهزة للصرف)",
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.orange[900], fontFamily: 'Cairo')),
                   const SizedBox(height: 10),
@@ -129,13 +128,18 @@ class _RevenueScreenState extends State<RevenueScreen> {
 
   Widget _buildPayoutQueueTable(bool isMobile) {
     return StreamBuilder<QuerySnapshot>(
-      // ✅ تعديل الـ Query لتتوافق مع إصدار Firebase الجديد
       stream: FirebaseFirestore.instance
           .collection('deliverySupermarkets')
-          .where('awaiting_verification', isGreaterThan: 0)
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        if (!snapshot.hasData) return const LinearProgressIndicator();
+        
+        final docs = snapshot.data!.docs.where((doc) {
+          final val = doc['awaiting_verification'] ?? 0;
+          return val > 0;
+        }).toList();
+
+        if (docs.isEmpty) {
           return const Card(child: Padding(padding: EdgeInsets.all(20), child: Text("لا توجد مبالغ معلقة للسداد ✅", style: TextStyle(fontFamily: 'Cairo'))));
         }
         return Container(
@@ -149,7 +153,7 @@ class _RevenueScreenState extends State<RevenueScreen> {
                 DataColumn(label: Text('المبلغ', style: TextStyle(fontFamily: 'Cairo'))),
                 DataColumn(label: Text('الإجراء', style: TextStyle(fontFamily: 'Cairo'))),
               ],
-              rows: snapshot.data!.docs.map((doc) {
+              rows: docs.map((doc) {
                 var data = doc.data() as Map<String, dynamic>;
                 return DataRow(cells: [
                   DataCell(Text(data['supermarketName'] ?? '..', style: const TextStyle(fontWeight: FontWeight.bold))),
@@ -170,13 +174,16 @@ class _RevenueScreenState extends State<RevenueScreen> {
 
   Widget _buildWithdrawRequestsTable(bool isMobile) {
     return StreamBuilder<QuerySnapshot>(
-      // ✅ تعديل الـ Query لتتوافق مع إصدار Firebase الجديد
       stream: FirebaseFirestore.instance
           .collection('withdrawRequests')
-          .where('status', isEqualTo: 'pending')
           .snapshots(),
       builder: (context, snapshot) {
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        if (!snapshot.hasData) return const LinearProgressIndicator();
+
+        // فلترة يدوية لتجنب مشاكل الـ Indexing في البداية
+        final docs = snapshot.data!.docs.where((doc) => doc['status'] == 'pending').toList();
+
+        if (docs.isEmpty) {
           return const Card(child: Padding(padding: EdgeInsets.all(20), child: Text("لا توجد طلبات سحب مناديب حالياً ✅", style: TextStyle(fontFamily: 'Cairo'))));
         }
         return Container(
@@ -188,18 +195,21 @@ class _RevenueScreenState extends State<RevenueScreen> {
               columns: const [
                 DataColumn(label: Text('المندوب', style: TextStyle(fontFamily: 'Cairo'))),
                 DataColumn(label: Text('المبلغ', style: TextStyle(fontFamily: 'Cairo'))),
+                DataColumn(label: Text('طريقة السحب', style: TextStyle(fontFamily: 'Cairo'))),
                 DataColumn(label: Text('الإجراء', style: TextStyle(fontFamily: 'Cairo'))),
               ],
-              rows: snapshot.data!.docs.map((doc) {
+              rows: docs.map((doc) {
                 var data = doc.data() as Map<String, dynamic>;
+                String driverName = data['driverName'] ?? "ID: ${doc.id.substring(0, 5)}";
+                
                 return DataRow(cells: [
-                  DataCell(Text(data['driverName'] ?? 'مندوب اكسب', style: const TextStyle(fontWeight: FontWeight.bold))),
-                  // ✅ تم إزالة const من TextStyle بسبب استخدام orange[800]
+                  DataCell(Text(driverName, style: const TextStyle(fontWeight: FontWeight.bold))),
                   DataCell(Text("${data['amount']} ج.م", style: TextStyle(color: Colors.orange[800], fontWeight: FontWeight.bold))),
+                  DataCell(Text(data['methodType'] ?? "غير محدد")),
                   DataCell(ElevatedButton(
-                    onPressed: () => _showConfirmWithdraw(context, doc.id, data['driverName'] ?? 'المندوب', data['amount']),
+                    onPressed: () => _showConfirmWithdraw(context, doc.id, data),
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800]),
-                    child: const Text("صرف", style: TextStyle(fontSize: 12, color: Colors.white)),
+                    child: const Text("مراجعة وصرف", style: TextStyle(fontSize: 11, color: Colors.white)),
                   )),
                 ]);
               }).toList(),
@@ -252,42 +262,54 @@ class _RevenueScreenState extends State<RevenueScreen> {
     );
   }
 
-  void _showConfirmWithdraw(BuildContext context, String docId, String name, dynamic amt) {
-    String selectedMethod = 'فودافون كاش';
+  void _showConfirmWithdraw(BuildContext context, String docId, Map<String, dynamic> data) {
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text("موافقة على سحب أرباح"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text("سيتم صرف $amt ج.م لـ $name وخصمها من محفظته."),
-              const SizedBox(height: 15),
-              DropdownButtonFormField<String>(
-                value: selectedMethod,
-                decoration: const InputDecoration(labelText: "وسيلة التحويل"),
-                items: ['فودافون كاش', 'نقدي', 'محفظة بنكية'].map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
-                onChanged: (val) => setState(() => selectedMethod = val!),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800]),
-              onPressed: () async {
-                Navigator.pop(context);
-                await FirebaseFirestore.instance.collection('withdrawRequests').doc(docId).update({
-                  'status': 'approved',
-                  'paymentMethod': selectedMethod,
-                  'approvedAt': FieldValue.serverTimestamp(),
-                });
-              },
-              child: const Text("موافقة نهائية", style: TextStyle(color: Colors.white)),
-            ),
+      builder: (context) => AlertDialog(
+        title: const Text("مراجعة بيانات سحب المندوب", style: TextStyle(fontFamily: 'Cairo')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _detailRow("الاسم:", data['driverName'] ?? "غير متوفر"),
+            _detailRow("المبلغ:", "${data['amount']} ج.م"),
+            _detailRow("الوسيلة:", data['methodType'] ?? "فودافون كاش"),
+            _detailRow("رقم التحويل:", data['accountNumber'] ?? "لم يذكر"),
+            _detailRow("هاتف المندوب:", data['driverPhone'] ?? "لم يذكر"),
+            const Divider(),
+            const Text("سيتم خصم المبلغ من محفظة المندوب فور التأكيد.", 
+                style: TextStyle(fontSize: 12, color: Colors.redAccent)),
           ],
         ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            onPressed: () async {
+              Navigator.pop(context);
+              await FirebaseFirestore.instance.collection('withdrawRequests').doc(docId).update({
+                'status': 'approved',
+                'approvedAt': FieldValue.serverTimestamp(),
+                'adminNote': 'تم التحويل بواسطة الإدارة'
+              });
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("✅ تم تأكيد الصرف والخصم")));
+            },
+            child: const Text("تأكيد التحويل الآن", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 13))),
+        ],
       ),
     );
   }
