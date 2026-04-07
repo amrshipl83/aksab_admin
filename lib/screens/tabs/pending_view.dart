@@ -11,14 +11,17 @@ class PendingView extends StatelessWidget {
 
     return StreamBuilder<List<QuerySnapshot>>(
       stream: CombineLatestStream.list([
+        // نجلب كل من في pendingManagers (مديرين ومشرفين)
         db.collection('pendingManagers').snapshots(),
+        // نجلب من pendingReps بشرط أن يكون مندوب مبيعات فقط
         db.collection('pendingReps')
-            .where('role', isEqualTo: 'sales_rep')
+            .where('role', isEqualTo: 'sales_rep') // الفلترة المطلوبة
             .snapshots(),
       ]),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
+        // دمج النتائج في قائمة واحدة
         final allDocs = snapshot.data!.expand((snap) => snap.docs).toList();
 
         if (allDocs.isEmpty) {
@@ -58,6 +61,7 @@ class PendingView extends StatelessWidget {
                     IconButton(
                       icon: const Icon(Icons.check_circle, color: Colors.green),
                       onPressed: () {
+                        // لو مندوب مبيعات نفتح الديالوج، لو غير كدة نوافق علطول (نفس منطقك القديم)
                         if (user['role'] == 'sales_rep') {
                           _showApproveDialog(context, db, docId, user, sourceCollection);
                         } else {
@@ -79,7 +83,7 @@ class PendingView extends StatelessWidget {
     );
   }
 
-  // نافذة طلب نسبة العمولة للمناديب
+  // نافذة طلب نسبة العمولة (تظهر للمناديب فقط)
   Future<void> _showApproveDialog(BuildContext context, FirebaseFirestore db, String docId, Map<String, dynamic> data, String sourceCol) async {
     final TextEditingController commissionController = TextEditingController();
 
@@ -88,27 +92,22 @@ class PendingView extends StatelessWidget {
       builder: (context) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          title: const Text("الموافقة على الطلب", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+          title: const Text("الموافقة على المندوب", style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("نوع الحساب: مندوب مبيعات", style: TextStyle(fontFamily: 'Cairo', color: Colors.blueGrey)),
+              const Text("ادخل نسبة العمولة إذا كان مسوقاً حراً، أو اتركها فارغة إذا كان موظفاً براتب ثابت.", 
+                style: TextStyle(fontFamily: 'Cairo', fontSize: 13)),
               const SizedBox(height: 15),
-              const Text("نسبة العمولة (اختياري):", style: TextStyle(fontFamily: 'Cairo', fontSize: 13)),
-              const SizedBox(height: 8),
               TextField(
                 controller: commissionController,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
-                  hintText: "اتركها فارغة للموظف الثابت",
                   border: OutlineInputBorder(),
                   suffixText: "%",
+                  hintText: "مثال: 0.5",
                 ),
               ),
-              const SizedBox(height: 10),
-              const Text(" * اتركها فارغة إذا كان المندوب موظفاً براتب ثابت.", 
-                style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: Colors.redAccent)),
             ],
           ),
           actions: [
@@ -123,7 +122,7 @@ class PendingView extends StatelessWidget {
                 Navigator.pop(context);
                 _approveUser(context, db, docId, data, sourceCol, commission);
               },
-              child: const Text("تأكيد الموافقة", style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
+              child: const Text("تأكيد وموافقة", style: TextStyle(fontFamily: 'Cairo', color: Colors.white)),
             ),
           ],
         ),
@@ -133,33 +132,35 @@ class PendingView extends StatelessWidget {
 
   Future<void> _approveUser(BuildContext context, FirebaseFirestore db, String docId, Map<String, dynamic> data, String sourceCol, double? commissionRate) async {
     try {
+      // المناديب يذهبون لـ salesRep والباقي لـ managers (نفس الأصل)
       bool isRep = (data['role'] == 'sales_rep');
       String targetCol = isRep ? 'salesRep' : 'managers';
-      
+
+      // إنشاء كود المندوب (نفس الأصل)
+      String? repCode = isRep ? "REP-$docId" : null;
+
       Map<String, dynamic> finalData = {
         ...data,
+        'repCode': repCode,
         'status': 'approved',
         'approvedAt': FieldValue.serverTimestamp(),
       };
 
-      if (isRep) {
-        finalData['repCode'] = "REP-${docId.substring(0, 5).toUpperCase()}";
-        if (commissionRate != null) {
-          finalData['commissionRate'] = commissionRate;
-          finalData['employmentType'] = 'freelancer';
-        } else {
-          finalData['employmentType'] = 'employee';
-        }
+      // إضافة حقل العمولة فقط إذا تم إدخاله (للمسوق الحر)
+      if (isRep && commissionRate != null) {
+        finalData['commissionRate'] = commissionRate;
+        finalData['isFreelancer'] = true;
+      } else if (isRep) {
+        finalData['isFreelancer'] = false; // موظف ثابت
       }
 
       await db.collection(targetCol).doc(docId).set(finalData);
       await db.collection(sourceCol).doc(docId).delete();
 
       if (context.mounted) {
-        String msg = (isRep && commissionRate != null) 
-            ? "تمت الموافقة كمندوب حر بنسبة $commissionRate%" 
-            : "تمت الموافقة بنجاح";
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg, style: const TextStyle(fontFamily: 'Cairo'))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("تمت الموافقة ونقل البيانات بنجاح", style: TextStyle(fontFamily: 'Cairo'))),
+        );
       }
     } catch (e) {
       debugPrint("Error: $e");
@@ -169,7 +170,7 @@ class PendingView extends StatelessWidget {
   Future<void> _rejectUser(BuildContext context, FirebaseFirestore db, String docId, String sourceCol) async {
     await db.collection(sourceCol).doc(docId).delete();
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم حذف الطلب")));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم الحذف")));
     }
   }
 
