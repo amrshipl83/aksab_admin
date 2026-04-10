@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/supermarket_model.dart'; // تأكد من استيراد الموديل
+import '../models/supermarket_model.dart'; 
 
 class AddProductsDialog extends StatefulWidget {
-  final SupermarketModel request; // نمرر الموديل كاملًا بدلاً من الاسم والـ ID فقط
-  final Function(List<Map<String, dynamic>>, Map<String, dynamic>) onConfirm; // أضفنا متغير للبيانات المعدلة
+  final SupermarketModel request; 
+  final Function(List<Map<String, dynamic>>, Map<String, dynamic>) onConfirm; 
 
   const AddProductsDialog({
     super.key,
@@ -24,8 +24,9 @@ class _AddProductsDialogState extends State<AddProductsDialog> {
   late TextEditingController _phoneController;
   late TextEditingController _whatsappController;
 
-  // متغيرات إضافة المنتجات (النظام الحالي)
+  // متغيرات إضافة المنتجات
   String? selectedMainCat, selectedSubCat, selectedProduct, productName;
+  String? productImageUrl, productMainId, productSubId; // 🚀 متغيرات البيانات المحشورة
   String? selectedUnit;
   List<dynamic> availableUnits = [];
   final TextEditingController _priceController = TextEditingController();
@@ -35,7 +36,6 @@ class _AddProductsDialogState extends State<AddProductsDialog> {
   @override
   void initState() {
     super.initState();
-    // تعبئة البيانات الموجودة فعلياً من الطلب
     _feeController = TextEditingController(text: widget.request.deliveryFee?.toString());
     _minOrderController = TextEditingController(text: widget.request.minimumOrderValue?.toString());
     _hoursController = TextEditingController(text: widget.request.deliveryHours);
@@ -54,6 +54,7 @@ class _AddProductsDialogState extends State<AddProductsDialog> {
     super.dispose();
   }
 
+  // 🎯 تعديل: جلب كامل بيانات المنتج (الاسم، الصورة، الأقسام)
   void _onProductChanged(String id, String name) async {
     setState(() {
       selectedProduct = id;
@@ -61,10 +62,17 @@ class _AddProductsDialogState extends State<AddProductsDialog> {
       availableUnits = [];
       selectedUnit = null;
     });
+
     var productDoc = await FirebaseFirestore.instance.collection('products').doc(id).get();
-    if (productDoc.exists && productDoc.data()!['units'] != null) {
+    if (productDoc.exists) {
+      var data = productDoc.data()!;
       setState(() {
-        availableUnits = productDoc.data()!['units'];
+        availableUnits = data['units'] ?? [];
+        // خطف البيانات الجديدة للتخزين المباشر
+        productImageUrl = (data['imageUrls'] != null && data['imageUrls'].isNotEmpty) 
+                          ? data['imageUrls'][0] : '';
+        productMainId = data['mainId'] ?? '';
+        productSubId = data['subId'] ?? '';
       });
     }
   }
@@ -82,6 +90,7 @@ class _AddProductsDialogState extends State<AddProductsDialog> {
     });
   }
 
+  // 🎯 تعديل: حفظ المنتج مع بياناته الكاملة ليتم "حشرها" في العرض لاحقاً
   void _saveProductToList() {
     if (selectedProduct == null || currentProductUnits.isEmpty) return;
     setState(() {
@@ -89,24 +98,32 @@ class _AddProductsDialogState extends State<AddProductsDialog> {
         'productId': selectedProduct,
         'productName': productName,
         'units': List.from(currentProductUnits),
+        // البيانات الإضافية المطلوبة لتطبيق المستهلك 🚀
+        'name': productName,
+        'imageUrl': productImageUrl,
+        'mainId': productMainId,
+        'subId': productSubId,
       });
+      // تصفير الخيارات لإضافة منتج جديد
       currentProductUnits.clear();
       selectedProduct = null;
       availableUnits = [];
+      productImageUrl = null;
+      productMainId = null;
+      productSubId = null;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text("مراجعة وتفعيل: ${widget.request.name}", 
+      title: Text("مراجعة وتفعيل: ${widget.request.name}",
           style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
       content: SizedBox(
         width: 700,
         child: SingleChildScrollView(
           child: Column(
             children: [
-              // --- الجزء الأول: مراجعة البيانات اللوجستية ---
               _buildSectionTitle("⚙️ مراجعة البيانات اللوجستية"),
               Row(
                 children: [
@@ -127,7 +144,6 @@ class _AddProductsDialogState extends State<AddProductsDialog> {
               ),
               const Divider(height: 40, thickness: 2, color: Colors.blueGrey),
 
-              // --- الجزء الثاني: إضافة المنتجات (النظام الحالي) ---
               _buildSectionTitle("📦 إضافة المنتجات والأسعار"),
               _buildFirebaseDropdown("القسم الرئيسي", "mainCategory", (val, name) {
                 setState(() { selectedMainCat = val; selectedSubCat = null; });
@@ -164,7 +180,7 @@ class _AddProductsDialogState extends State<AddProductsDialog> {
                       ),
                       const SizedBox(height: 10),
                       ElevatedButton.icon(
-                        onPressed: _addUnitToProduct, 
+                        onPressed: _addUnitToProduct,
                         icon: const Icon(Icons.add),
                         label: const Text("إضافة الوحدة"),
                       ),
@@ -185,14 +201,15 @@ class _AddProductsDialogState extends State<AddProductsDialog> {
                   child: const Text("حفظ المنتج في القائمة"),
                 ),
               ],
-              
+
               const Divider(height: 30),
               ...finalProductsToUpload.map((p) => Card(
                 color: Colors.grey[100],
                 child: ListTile(
                   title: Text(p['productName'], style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text("عدد الوحدات المسعرة: ${p['units'].length}"),
-                  trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () => setState(() => finalProductsToUpload.remove(p))),
+                  trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red), 
+                  onPressed: () => setState(() => finalProductsToUpload.remove(p))),
                 ),
               )),
             ],
@@ -203,7 +220,6 @@ class _AddProductsDialogState extends State<AddProductsDialog> {
         TextButton(onPressed: () => Navigator.pop(context), child: const Text("إلغاء")),
         ElevatedButton(
           onPressed: finalProductsToUpload.isEmpty ? null : () {
-            // تجميع البيانات اللوجستية بعد التعديل
             Map<String, dynamic> updatedData = {
               'deliveryFee': double.tryParse(_feeController.text) ?? 0.0,
               'minimumOrderValue': double.tryParse(_minOrderController.text) ?? 0.0,
@@ -220,7 +236,6 @@ class _AddProductsDialogState extends State<AddProductsDialog> {
     );
   }
 
-  // دالة مساعدة لبناء حقول النص
   Widget _buildTextField(String label, TextEditingController controller, {String? prefix, IconData? icon, String? hint}) {
     return TextField(
       controller: controller,

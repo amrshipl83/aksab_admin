@@ -27,7 +27,7 @@ class DeliveryService {
     await _db.collection('pendingSupermarkets').doc(requestId).delete();
   }
 
-  // 5. عملية الموافقة المطورة (نظام المدة المتغيرة المختارة)
+  // 5. عملية الموافقة المطورة (نظام البحث السريع بالحشر المباشر)
   Future<void> approveRequest({
     required String requestId,
     required String supermarketName,
@@ -48,7 +48,7 @@ class DeliveryService {
 
     // --- منطق التوقيت والاشتراك المتغير ---
     DateTime now = DateTime.now();
-    
+
     // قراءة المدة من البيانات المرسلة من اللوحة (الافتراضي 30 يوم إذا لم يرسل)
     int trialDays = extraData['customTrialDays'] ?? 30;
     DateTime trialExpiry = now.add(Duration(days: trialDays));
@@ -62,7 +62,7 @@ class DeliveryService {
       'isActive': true,
       'approvalDate': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
-      
+
       // --- حقول نظام الاشتراكات المحدثة بقيمة متغيرة ---
       'subscriptionStatus': 'trial',
       'currentPlan': 'الافتراضية',
@@ -70,16 +70,16 @@ class DeliveryService {
       'isVisibleInStore': true,
       'isTrialUsed': true,
       'selectedTrialPeriod': trialDays, // توثيق المدة المختارة للرجوع إليها
-      
-      ...extraData, 
+      ...extraData,
     };
 
     // 1. إضافة الماركت للمجموعة الأساسية
     batch.set(activeRef, finalMarketData);
 
-    // 2. إضافة المنتجات لمجموعة عروض السوق
+    // 2. إضافة المنتجات لمجموعة عروض السوق (مع حشر البيانات للبحث السريع) 🚀
     for (var prod in products) {
       DocumentReference offerRef = _db.collection('marketOffer').doc("${requestId}_${prod['productId']}");
+      
       batch.set(offerRef, {
         'ownerId': requestId,
         'supermarketName': supermarketName,
@@ -88,6 +88,12 @@ class DeliveryService {
         'status': 'active',
         'isVisible': true,
         'createdAt': FieldValue.serverTimestamp(),
+        
+        // 🎯 البيانات المحشورة لضمان سرعة تطبيق المستهلك:
+        'productName': prod['name'] ?? 'منتج',
+        'productImage': prod['imageUrl'] ?? '',
+        'mainCategoryId': prod['mainId'] ?? '',
+        'subCategoryId': prod['subId'] ?? '',
       });
     }
 
