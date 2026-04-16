@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:image/image.dart' as img; // مكتبة الضغط
+import 'dart:typed_data'; // للتعامل مع الـ Bytes في الويب
 
 class MainCategoryTab extends StatefulWidget {
   const MainCategoryTab({super.key});
@@ -25,6 +27,20 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
   final String cloudName = "dgmmx6jbu";
   final String uploadPreset = "commerce";
 
+  // فانكشن ضغط الصور المخصصة للويب
+  Future<Uint8List> _compressWebImage(Uint8List bytes) async {
+    img.Image? image = img.decodeImage(bytes);
+    if (image == null) return bytes;
+
+    // تصغير العرض لـ 800 بكسل لصور الأقسام للحفاظ على مساحة كلوديناري
+    if (image.width > 800) {
+      image = img.copyResize(image, width: 800);
+    }
+
+    // ضغط الصورة بجودة 70% وتحويلها لـ JPG
+    return Uint8List.fromList(img.encodeJpg(image, quality: 70));
+  }
+
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
@@ -43,12 +59,12 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
       _orderController.text = doc['order'].toString();
       _existingImageUrl = doc['imageUrl'];
       _selectedImage = null;
-      
+
       // قراءة حالة متاح للمستهلك
       final behavior = doc.data().toString().contains('offerBehavior') ? doc['offerBehavior'] : "";
       _isForConsumer = (behavior == "supermarket_offers");
     });
-    
+
     // 🚀 التحديث يطلعك فوق أوتوماتيكياً
     _scrollController.animateTo(0, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut);
   }
@@ -85,11 +101,22 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
   Future<Map<String, String>?> _uploadToCloudinary(XFile xFile) async {
     try {
       final url = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/image/upload');
-      final bytes = await xFile.readAsBytes();
+      
+      // 1. قراءة البيانات الأصلية
+      Uint8List originalBytes = await xFile.readAsBytes();
+      
+      // 2. تطبيق الضغط لتقليل استهلاك الكريديت في كلوديناري
+      Uint8List compressedBytes = await _compressWebImage(originalBytes);
+
       final request = http.MultipartRequest('POST', url)
         ..fields['upload_preset'] = uploadPreset
         ..fields['folder'] = 'mainCategoryImages'
-        ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: xFile.name));
+        // 3. رفع البيانات المضغوطة
+        ..files.add(http.MultipartFile.fromBytes(
+          'file', 
+          compressedBytes, 
+          filename: 'compressed_${xFile.name}.jpg'
+        ));
 
       final response = await request.send();
       if (response.statusCode == 200) {
@@ -134,7 +161,6 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
       if (_editingDocId != null) {
         await FirebaseFirestore.instance.collection('mainCategory').doc(_editingDocId).update(data);
         _showSuccessDialog("تم تحديث القسم بنجاح");
-        // ملحوظة: هنا مش بنعمل _resetForm عشان الحقول متتمسحش وتفضل قدامك
       } else {
         data['createdAt'] = FieldValue.serverTimestamp();
         await FirebaseFirestore.instance.collection('mainCategory').add(data);
@@ -157,7 +183,7 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
           const SizedBox(height: 15),
           TextField(controller: _orderController, keyboardType: TextInputType.number, textAlign: TextAlign.right, decoration: const InputDecoration(labelText: "الترتيب", border: OutlineInputBorder())),
           const SizedBox(height: 15),
-          
+
           // 💡 الشيك بوكس الجديد
           CheckboxListTile(
             title: const Text("متاح للمستهلك (عروض سوبر ماركت)", textAlign: TextAlign.right),
@@ -166,7 +192,7 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
             onChanged: (val) => setState(() => _isForConsumer = val ?? false),
             controlAffinity: ListTileControlAffinity.leading,
           ),
-          
+
           const SizedBox(height: 15),
           GestureDetector(
             onTap: _pickImage,
@@ -220,7 +246,7 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
                 itemBuilder: (context, index) {
                   var doc = snapshot.data!.docs[index];
                   bool isPromo = (doc.data().toString().contains('offerBehavior') && doc['offerBehavior'] == "supermarket_offers");
-                  
+
                   return ListTile(
                     leading: CircleAvatar(backgroundImage: NetworkImage(doc['imageUrl'])),
                     title: Text(doc['name']),

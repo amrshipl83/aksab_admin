@@ -31,6 +31,7 @@ dependencies:
   data_table_2: ^2.7.2
   file_picker: ^10.3.10
   flutter_barcode_scanner: ^2.0.0
+  image: ^4.3.0
 
 dev_dependencies:
   flutter_test:
