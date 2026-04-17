@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:image/image.dart' as img; // مكتبة الضغط
+import 'dart:typed_data'; // للتعامل مع الـ Bytes في الويب
 
 class SubCategoryTab extends StatefulWidget {
   const SubCategoryTab({super.key});
@@ -23,6 +25,20 @@ class _SubCategoryTabState extends State<SubCategoryTab> {
 
   final String cloudName = "dgmmx6jbu";
   final String uploadPreset = "commerce";
+
+  // فانكشن ضغط الصور المخصصة للويب (تحافظ على جودة العرض وتوفر مساحة التخزين)
+  Future<Uint8List> _compressWebImage(Uint8List bytes) async {
+    img.Image? image = img.decodeImage(bytes);
+    if (image == null) return bytes;
+
+    // تصغير العرض لـ 800 بكسل لصور الأقسام الفرعية
+    if (image.width > 800) {
+      image = img.copyResize(image, width: 800);
+    }
+
+    // إعادة التشفير بصيغة JPG مع جودة 70%
+    return Uint8List.fromList(img.encodeJpg(image, quality: 70));
+  }
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
@@ -61,11 +77,22 @@ class _SubCategoryTabState extends State<SubCategoryTab> {
   Future<Map<String, String>?> _uploadToCloudinary(XFile xFile) async {
     try {
       final url = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/image/upload');
-      final bytes = await xFile.readAsBytes();
+      
+      // 1. قراءة الـ Bytes الأصلية من الملف المختار
+      Uint8List originalBytes = await xFile.readAsBytes();
+      
+      // 2. تطبيق عملية الضغط قبل الرفع
+      Uint8List compressedBytes = await _compressWebImage(originalBytes);
+
       final request = http.MultipartRequest('POST', url)
         ..fields['upload_preset'] = uploadPreset
         ..fields['folder'] = 'subCategoryImages'
-        ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: xFile.name));
+        // 3. رفع الـ bytes المضغوطة بدلاً من الأصلية
+        ..files.add(http.MultipartFile.fromBytes(
+          'file', 
+          compressedBytes, 
+          filename: 'compressed_${xFile.name}.jpg'
+        ));
 
       final response = await request.send();
       if (response.statusCode == 200) {
@@ -157,7 +184,7 @@ class _SubCategoryTabState extends State<SubCategoryTab> {
                   ? const Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.cloud_upload, size: 40), Text("اضغط لرفع الصورة")])
                   : ClipRRect(
                       borderRadius: BorderRadius.circular(10),
-                      child: _selectedImage != null 
+                      child: _selectedImage != null
                         ? Image.network(_selectedImage!.path, fit: BoxFit.cover)
                         : Image.network(_existingImageUrl!, fit: BoxFit.cover),
                     ),
