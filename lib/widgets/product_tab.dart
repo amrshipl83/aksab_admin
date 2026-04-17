@@ -6,7 +6,9 @@ import 'dart:convert';
 import 'package:excel/excel.dart' as excel_lib;
 import 'package:file_picker/file_picker.dart';
 import '../pages/products_report_page.dart';
-import 'excel_import_service.dart'; // استيراد الخدمة الجديدة
+import 'excel_import_service.dart'; 
+import 'package:image/image.dart' as img; // مكتبة الضغط
+import 'dart:typed_data'; // للتعامل مع الـ Bytes في الويب
 
 class ProductTab extends StatefulWidget {
   const ProductTab({super.key});
@@ -35,6 +37,19 @@ class _ProductTabState extends State<ProductTab> {
   final String cloudName = "dgmmx6jbu";
   final String uploadPreset = "commerce";
 
+  // فانكشن ضغط الصور المخصصة للويب (تنسيق JPG وجودة 70%)
+  Future<Uint8List> _compressWebImage(Uint8List bytes) async {
+    img.Image? image = img.decodeImage(bytes);
+    if (image == null) return bytes;
+
+    // تصغير العرض لـ 1024 بكسل لصور المنتجات لضمان دقة جيدة مع حجم ملف صغير
+    if (image.width > 1024) {
+      image = img.copyResize(image, width: 1024);
+    }
+
+    return Uint8List.fromList(img.encodeJpg(image, quality: 70));
+  }
+
   Future<void> _pickImage(int index) async {
     final picker = ImagePicker();
     final image = await picker.pickImage(source: ImageSource.gallery);
@@ -54,15 +69,26 @@ class _ProductTabState extends State<ProductTab> {
     }
   }
 
-  // الرفع اليدوي - بسيط ومضمون للـ Unsigned
+  // الرفع اليدوي مع دمج عملية الضغط قبل الإرسال
   Future<Map<String, String>?> _uploadSingleImage(XFile xFile) async {
     try {
-      final bytes = await xFile.readAsBytes();
       final url = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/image/upload');
+      
+      // 1. قراءة بيانات الصورة الأصلية
+      Uint8List originalBytes = await xFile.readAsBytes();
+      
+      // 2. ضغط الصورة لتقليل حجمها قبل الرفع
+      Uint8List compressedBytes = await _compressWebImage(originalBytes);
+
       final request = http.MultipartRequest('POST', url)
         ..fields['upload_preset'] = uploadPreset
         ..fields['folder'] = 'productImages'
-        ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: xFile.name));
+        // 3. رفع البيانات المضغوطة
+        ..files.add(http.MultipartFile.fromBytes(
+          'file', 
+          compressedBytes, 
+          filename: 'prod_${xFile.name}.jpg'
+        ));
 
       final response = await request.send();
       if (response.statusCode == 200) {
@@ -120,21 +146,17 @@ class _ProductTabState extends State<ProductTab> {
     }
   }
 
-  // دالة الاستيراد الذكية الجديدة
-    // استبدل الدالة القديمة بهذه الدالة تماماً
   Future<void> _importExcelWithImages() async {
-    // 1. اختيار ملف الإكسل
     FilePickerResult? excelResult = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['xlsx'],
     );
     if (excelResult == null) return;
 
-    // 2. اختيار مجلد الصور
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("الآن اختر جميع صور المنتجات من الاستوديو"))
     );
-    
+
     FilePickerResult? imagesResult = await FilePicker.platform.pickFiles(
       type: FileType.image,
       allowMultiple: true,
@@ -144,16 +166,12 @@ class _ProductTabState extends State<ProductTab> {
     setState(() => _isLoading = true);
 
     try {
-      // ✅ المناداة الصحيحة المتوافقة مع التعديل الأخير في الـ Service
       await ExcelImportService.importWithImages(
-        context: context, // بعتنا الكونتيكست للرسايل
+        context: context,
         excelFile: excelResult.files.first,
         imageFiles: imagesResult.files,
       );
-      
-      // نرجع نحدث الصفحة بعد الاستيراد
-      setState(() {}); 
-      
+      setState(() {});
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("خطأ أثناء الاستيراد: $e"))
@@ -162,7 +180,6 @@ class _ProductTabState extends State<ProductTab> {
       setState(() => _isLoading = false);
     }
   }
-
 
   void _resetForm() {
     _nameController.clear();
@@ -187,7 +204,6 @@ class _ProductTabState extends State<ProductTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          // زرار الكتالوج
           InkWell(
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProductsReportPage())),
             child: Container(
@@ -203,7 +219,6 @@ class _ProductTabState extends State<ProductTab> {
             ),
           ),
           const SizedBox(height: 10),
-          // الزرار العبقري الجديد
           ElevatedButton.icon(
             onPressed: _isLoading ? null : _importExcelWithImages,
             icon: const Icon(Icons.auto_awesome, color: Colors.white),
