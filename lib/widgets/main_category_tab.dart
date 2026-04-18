@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:image/image.dart' as img; // مكتبة الضغط
 import 'dart:typed_data'; // للتعامل مع الـ Bytes في الويب
 
 class MainCategoryTab extends StatefulWidget {
@@ -27,20 +26,6 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
   final String cloudName = "dgmmx6jbu";
   final String uploadPreset = "commerce";
 
-  // فانكشن ضغط الصور المخصصة للويب
-  Future<Uint8List> _compressWebImage(Uint8List bytes) async {
-    img.Image? image = img.decodeImage(bytes);
-    if (image == null) return bytes;
-
-    // تصغير العرض لـ 800 بكسل لصور الأقسام للحفاظ على مساحة كلوديناري
-    if (image.width > 800) {
-      image = img.copyResize(image, width: 800);
-    }
-
-    // ضغط الصورة بجودة 70% وتحويلها لـ JPG
-    return Uint8List.fromList(img.encodeJpg(image, quality: 70));
-  }
-
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
@@ -59,13 +44,14 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
       _orderController.text = doc['order'].toString();
       _existingImageUrl = doc['imageUrl'];
       _selectedImage = null;
-
+      
       // قراءة حالة متاح للمستهلك
-      final behavior = doc.data().toString().contains('offerBehavior') ? doc['offerBehavior'] : "";
+      final data = doc.data() as Map<String, dynamic>;
+      final behavior = data.containsKey('offerBehavior') ? data['offerBehavior'] : "";
       _isForConsumer = (behavior == "supermarket_offers");
     });
 
-    // 🚀 التحديث يطلعك فوق أوتوماتيكياً
+    // التحديث يطلعك فوق أوتوماتيكياً
     _scrollController.animateTo(0, duration: const Duration(milliseconds: 500), curve: Curves.easeInOut);
   }
 
@@ -102,28 +88,27 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
     try {
       final url = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/image/upload');
       
-      // 1. قراءة البيانات الأصلية
-      Uint8List originalBytes = await xFile.readAsBytes();
-      
-      // 2. تطبيق الضغط لتقليل استهلاك الكريديت في كلوديناري
-      Uint8List compressedBytes = await _compressWebImage(originalBytes);
+      // قراءة البيانات الأصلية بدون أي ضغط محلي لتجنب التجمد
+      Uint8List imageBytes = await xFile.readAsBytes();
 
       final request = http.MultipartRequest('POST', url)
         ..fields['upload_preset'] = uploadPreset
         ..fields['folder'] = 'mainCategoryImages'
-        // 3. رفع البيانات المضغوطة
         ..files.add(http.MultipartFile.fromBytes(
-          'file', 
-          compressedBytes, 
-          filename: 'compressed_${xFile.name}.jpg'
+          'file',
+          imageBytes,
+          filename: xFile.name,
         ));
 
       final response = await request.send();
       if (response.statusCode == 200) {
-        final data = jsonDecode(await response.stream.bytesToString());
+        final responseData = await response.stream.bytesToString();
+        final data = jsonDecode(responseData);
         return {'url': data['secure_url'], 'public_id': data['public_id']};
       }
-    } catch (e) { print("Upload Error: $e"); }
+    } catch (e) {
+      print("Upload Error: $e");
+    }
     return null;
   }
 
@@ -152,7 +137,6 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
         'imageUrl': finalImageUrl,
         'status': 'active',
         'updatedAt': FieldValue.serverTimestamp(),
-        // 💡 إضافة الحقل المطلوب بالمنطق اللي طلبته
         'offerBehavior': _isForConsumer ? "supermarket_offers" : "",
       };
 
@@ -167,6 +151,8 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
         _showSuccessDialog("تم إضافة القسم بنجاح");
         _resetForm(); // في حالة الإضافة الجديدة فقط نمسح الحقول
       }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ: $e")));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -179,12 +165,19 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          TextField(controller: _nameController, textAlign: TextAlign.right, decoration: const InputDecoration(labelText: "اسم القسم الرئيسي", border: OutlineInputBorder())),
+          TextField(
+            controller: _nameController,
+            textAlign: TextAlign.right,
+            decoration: const InputDecoration(labelText: "اسم القسم الرئيسي", border: OutlineInputBorder()),
+          ),
           const SizedBox(height: 15),
-          TextField(controller: _orderController, keyboardType: TextInputType.number, textAlign: TextAlign.right, decoration: const InputDecoration(labelText: "الترتيب", border: OutlineInputBorder())),
+          TextField(
+            controller: _orderController,
+            keyboardType: TextInputType.number,
+            textAlign: TextAlign.right,
+            decoration: const InputDecoration(labelText: "الترتيب", border: OutlineInputBorder()),
+          ),
           const SizedBox(height: 15),
-
-          // 💡 الشيك بوكس الجديد
           CheckboxListTile(
             title: const Text("متاح للمستهلك (عروض سوبر ماركت)", textAlign: TextAlign.right),
             value: _isForConsumer,
@@ -192,20 +185,20 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
             onChanged: (val) => setState(() => _isForConsumer = val ?? false),
             controlAffinity: ListTileControlAffinity.leading,
           ),
-
           const SizedBox(height: 15),
           GestureDetector(
             onTap: _pickImage,
             child: Container(
-              height: 150, width: double.infinity,
+              height: 150,
+              width: double.infinity,
               decoration: BoxDecoration(border: Border.all(color: Colors.blue[200]!), borderRadius: BorderRadius.circular(10)),
               child: (_selectedImage == null && _existingImageUrl == null)
                   ? const Center(child: Text("اضغط لرفع صورة القسم الرئيسي"))
                   : ClipRRect(
                       borderRadius: BorderRadius.circular(10),
                       child: _selectedImage != null
-                        ? Image.network(_selectedImage!.path, fit: BoxFit.cover)
-                        : Image.network(_existingImageUrl!, fit: BoxFit.cover),
+                          ? Image.network(_selectedImage!.path, fit: BoxFit.cover)
+                          : Image.network(_existingImageUrl!, fit: BoxFit.cover),
                     ),
             ),
           ),
@@ -228,8 +221,9 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
                   onPressed: _isLoading ? null : _saveMainCategory,
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4361ee)),
                   child: _isLoading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : Text(_editingDocId == null ? "حفظ القسم الرئيسي" : "تحديث البيانات الآن", style: const TextStyle(color: Colors.white)),
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : Text(_editingDocId == null ? "حفظ القسم الرئيسي" : "تحديث البيانات الآن",
+                          style: const TextStyle(color: Colors.white)),
                 ),
               ),
             ],
@@ -245,7 +239,8 @@ class _MainCategoryTabState extends State<MainCategoryTab> {
                 itemCount: snapshot.data!.docs.length,
                 itemBuilder: (context, index) {
                   var doc = snapshot.data!.docs[index];
-                  bool isPromo = (doc.data().toString().contains('offerBehavior') && doc['offerBehavior'] == "supermarket_offers");
+                  var docData = doc.data() as Map<String, dynamic>;
+                  bool isPromo = (docData.containsKey('offerBehavior') && docData['offerBehavior'] == "supermarket_offers");
 
                   return ListTile(
                     leading: CircleAvatar(backgroundImage: NetworkImage(doc['imageUrl'])),

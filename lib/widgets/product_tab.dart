@@ -6,8 +6,7 @@ import 'dart:convert';
 import 'package:excel/excel.dart' as excel_lib;
 import 'package:file_picker/file_picker.dart';
 import '../pages/products_report_page.dart';
-import 'excel_import_service.dart'; 
-import 'package:image/image.dart' as img; // مكتبة الضغط
+import 'excel_import_service.dart';
 import 'dart:typed_data'; // للتعامل مع الـ Bytes في الويب
 
 class ProductTab extends StatefulWidget {
@@ -37,19 +36,6 @@ class _ProductTabState extends State<ProductTab> {
   final String cloudName = "dgmmx6jbu";
   final String uploadPreset = "commerce";
 
-  // فانكشن ضغط الصور المخصصة للويب (تنسيق JPG وجودة 70%)
-  Future<Uint8List> _compressWebImage(Uint8List bytes) async {
-    img.Image? image = img.decodeImage(bytes);
-    if (image == null) return bytes;
-
-    // تصغير العرض لـ 1024 بكسل لصور المنتجات لضمان دقة جيدة مع حجم ملف صغير
-    if (image.width > 1024) {
-      image = img.copyResize(image, width: 1024);
-    }
-
-    return Uint8List.fromList(img.encodeJpg(image, quality: 70));
-  }
-
   Future<void> _pickImage(int index) async {
     final picker = ImagePicker();
     final image = await picker.pickImage(source: ImageSource.gallery);
@@ -69,30 +55,28 @@ class _ProductTabState extends State<ProductTab> {
     }
   }
 
-  // الرفع اليدوي مع دمج عملية الضغط قبل الإرسال
+  // الرفع المباشر بدون ضغط محلي لتجنب تجمد المتصفح
   Future<Map<String, String>?> _uploadSingleImage(XFile xFile) async {
     try {
       final url = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/image/upload');
       
-      // 1. قراءة بيانات الصورة الأصلية
+      // 1. قراءة بيانات الصورة الأصلية مباشرة
       Uint8List originalBytes = await xFile.readAsBytes();
-      
-      // 2. ضغط الصورة لتقليل حجمها قبل الرفع
-      Uint8List compressedBytes = await _compressWebImage(originalBytes);
 
       final request = http.MultipartRequest('POST', url)
         ..fields['upload_preset'] = uploadPreset
         ..fields['folder'] = 'productImages'
-        // 3. رفع البيانات المضغوطة
+        // 2. رفع الملف الأصلي وترك مهمة الضغط لـ Cloudinary بناءً على الـ Preset
         ..files.add(http.MultipartFile.fromBytes(
-          'file', 
-          compressedBytes, 
+          'file',
+          originalBytes,
           filename: 'prod_${xFile.name}.jpg'
         ));
 
       final response = await request.send();
       if (response.statusCode == 200) {
-        final data = jsonDecode(await response.stream.bytesToString());
+        final responseData = await response.stream.bytesToString();
+        final data = jsonDecode(responseData);
         return {'url': data['secure_url'], 'public_id': data['public_id']};
       }
     } catch (e) {
@@ -141,6 +125,8 @@ class _ProductTabState extends State<ProductTab> {
 
       _resetForm();
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("تم إضافة المنتج بنجاح")));
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("خطأ: $e")));
     } finally {
       setState(() => _isLoading = false);
     }
@@ -164,7 +150,6 @@ class _ProductTabState extends State<ProductTab> {
     if (imagesResult == null) return;
 
     setState(() => _isLoading = true);
-
     try {
       await ExcelImportService.importWithImages(
         context: context,
@@ -228,7 +213,7 @@ class _ProductTabState extends State<ProductTab> {
           const SizedBox(height: 25),
           TextField(controller: _barcodeController, textAlign: TextAlign.right, decoration: const InputDecoration(labelText: "باركود المنتج (يدوي أو اسكنر)", border: OutlineInputBorder(), prefixIcon: Icon(Icons.qr_code))),
           const SizedBox(height: 10),
-          TextField(controller: _nameController, textAlign: TextAlign.right, decoration: const InputDecoration(labelText: "اسم المنتج", border: OutlineInputBorder())),
+          TextField(controller: _nameController, textAlign: TextAlign.right, decoration: const InputDecoration(labelText: "اسم المنتج", border: OutlineInputBorder()),),
           const SizedBox(height: 10),
           TextField(controller: _descController, textAlign: TextAlign.right, maxLines: 2, decoration: const InputDecoration(labelText: "وصف المنتج", border: OutlineInputBorder())),
           const SizedBox(height: 10),
@@ -281,7 +266,9 @@ class _ProductTabState extends State<ProductTab> {
               onTap: () => _pickImage(index),
               child: Container(
                 decoration: BoxDecoration(border: Border.all(color: index == 0 ? Colors.blue : Colors.grey), borderRadius: BorderRadius.circular(8)),
-                child: selectedImages[index] == null ? Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.add_a_photo), Text("صورة ${index + 1}")]) : ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(selectedImages[index]!.path, fit: BoxFit.cover)),
+                child: selectedImages[index] == null 
+                  ? Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.add_a_photo), Text("صورة ${index + 1}")]) 
+                  : ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.network(selectedImages[index]!.path, fit: BoxFit.cover)),
               ),
             ),
           ),
